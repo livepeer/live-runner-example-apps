@@ -1,6 +1,6 @@
 # Hello-world app
 
-The smallest possible general-runner app: a synchronous request/response over HTTP. It self-registers with an orchestrator and exposes `POST /hello`, which takes `{"name": "..."}` and returns `{"message": "Hello, <name>!"}`. No video, WebSocket, or streaming — just the most common app shape.
+The smallest possible app on the Livepeer network: a synchronous request/response over HTTP. It self-registers with an orchestrator and exposes `POST /hello`, which takes `{"name": "..."}` and returns `{"message": "Hello, <name>!"}`. No video, WebSocket, or streaming — just the most common app shape.
 
 |              |                                      |
 | ------------ | ------------------------------------ |

@@ -1,11 +1,11 @@
-# On-chain payment overlay for the vLLM example. Layer it on the offchain base:
-#   docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d --build
+# On-chain payment overlay for vllm. Layer it on the offchain base:
+#   docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d
 #
 # Adds the shared remote signer, re-points the orchestrator on-chain (see
-# ../compose.onchain.yml), and registers vLLM with a price so the orchestrator
-# issues a payment challenge. Requires a local .env (gitignored); copy
-# .env.example and fill it in. Run the gateway with --signer so it pays per
-# request; the client stays unchanged stock OpenAI:
+# ../compose.onchain.yml), and mounts runners.json so the statically attached
+# runner advertises a price and the orchestrator issues a payment challenge.
+# Requires a local .env (gitignored); copy .env.example and fill it in. Then the
+# gateway pays per call through the signer:
 #   uv run gateway.py --signer http://localhost:7936 &
 #   uv run client.py --prompt "Hello!"
 
@@ -21,14 +21,26 @@ services:
     extends:
       file: ../compose.onchain.yml
       service: orchestrator
-
-  # Re-declare the command to advertise a price (base file registers free).
-  runner:
+    # Same flags as ../compose.onchain.yml, restated to add -liveRunnerConfig
+    # (`extends` can't append one) + mount runners.json.
     command:
-      - python
-      - runner.py
-      - --orchestrator=https://orchestrator:8935
-      - --orchSecret=abcdef
-      - --runner-url=http://vllm:8000
-      - --price=${PRICE_PER_UNIT}
-      - --pixels-per-unit=${PIXELS_PER_UNIT}
+      - -orchestrator
+      - -useLiveRunners
+      - -serviceAddr=127.0.0.1:8935
+      - -httpAddr=0.0.0.0:8935
+      - -liveRunnerAddr=https://orchestrator:8935
+      - -orchSecret=abcdef
+      - -network=${NETWORK}
+      - -ethUrl=${ETH_RPC_URL}
+      - -ethKeystorePath=/keystore
+      - -ethAcctAddr=${ORCH_ETH_ACCT}
+      - -ethPassword=${ORCH_ETH_PASSWORD}
+      - -ethOrchAddr=${ORCH_ONCHAIN_ADDR}
+      - -pricePerUnit=0
+      - -ticketEV=1000000000000
+      - -liveRunnerConfig=/config/runners.json
+      - -monitor=false
+      - -v=6
+    volumes:
+      - ${ORCH_KEYSTORE_DIR}:/keystore:ro
+      - ./runners.json:/config/runners.json:ro

@@ -46,19 +46,32 @@ def main() -> None:
     args = _parse_args()
     signer_url = args.signer.strip() or None
 
-    async def _forward(request: web.Request) -> web.Response:
+    async def _forward(request: web.Request) -> web.StreamResponse:
+        payload = await request.json()
+        runner_path = request.path  # e.g. /v1/chat/completions
         session = await reserve_session(discovery_url=args.discovery, app=APP_ID, signer_url=signer_url)
+
         try:
-            result = await call_runner(
-                runner_url=session.app_url.rstrip("/") + request.path,  # e.g. .../app + /v1/chat/completions
-                payload=await request.json(),
-                signer_url=signer_url,
-            )
-            # TODO(streaming): this buffers the whole response, so OpenAI stream=True
-            # (text/event-stream) is collected into one blob -- call_runner reads the
-            # full body via request_json. True SSE passthrough needs a streaming variant
-            # of call_runner in the SDK (e.g. stream=True returning a chunk iterator);
-            # the gateway would then pipe chunks into a web.StreamResponse.
+            runner_url = session.app_url.rstrip("/") + runner_path
+
+            # When the OpenAI client asks for stream=True the runner replies with
+            # text/event-stream; pipe those chunks straight through with stream=True
+            # so tokens reach the client as they arrive instead of buffering the blob.
+            if payload.get("stream"):
+                async with await call_runner(
+                    runner_url=runner_url, payload=payload, signer_url=signer_url, stream=True
+                ) as stream:
+                    resp = web.StreamResponse(
+                        status=stream.status,
+                        headers={"Content-Type": stream.content_type or "text/event-stream"},
+                    )
+                    await resp.prepare(request)
+                    async for chunk in stream.aiter_bytes():  # raw bytes -> preserve SSE framing
+                        await resp.write(chunk)
+                    await resp.write_eof()
+                    return resp
+
+            result = await call_runner(runner_url=runner_url, payload=payload, signer_url=signer_url)
             return web.json_response(result.data)
         finally:
             with suppress(Exception):

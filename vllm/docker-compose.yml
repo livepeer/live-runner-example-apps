@@ -1,26 +1,36 @@
-# Offchain demo (infra side): orchestrator + vLLM OpenAI server + a registrar
-# that advertises vLLM as a Live Runner. Requires an NVIDIA GPU for vLLM.
-#
-#   docker compose up -d --build
-#   uv run gateway.py &                  # local gateway (OpenAI->Livepeer) on the host
-#   uv run client.py --prompt "Hello!"   # stock openai -> the local gateway on :8080
-#
-# The orchestrator is defined once in ../compose.orchestrator.yml and pulled in
-# with `extends`. This file is the network side; the local gateway + OpenAI
-# client are consumer-side and run on the host (see gateway.py / client.py).
+# Offchain demo: orchestrator + the official vLLM image, with vLLM attached as a
+# static runner via runners.json (-liveRunnerConfig). Requires an NVIDIA GPU.
+# The gateway + OpenAI client run on the host (see README.md / gateway.py).
+#   docker compose up -d
+#   uv run gateway.py &                  # OpenAI endpoint on :8080 (host)
+#   uv run client.py --prompt "Hello!"   # stock openai -> the gateway
 
 services:
   orchestrator:
     extends:
       file: ../compose.orchestrator.yml
       service: orchestrator
+    # `extends` can't append a single flag to `command`, so the command is
+    # restated here with -liveRunnerConfig added and runners.json mounted in.
+    command:
+      - -orchestrator
+      - -useLiveRunners
+      - -serviceAddr=127.0.0.1:8935
+      - -httpAddr=0.0.0.0:8935
+      - -liveRunnerAddr=https://orchestrator:8935
+      - -orchSecret=abcdef
+      - -network=offchain
+      - -monitor=false
+      - -liveRunnerConfig=/config/runners.json
+      - -v=6
+    volumes:
+      - ./runners.json:/config/runners.json:ro
 
   vllm:
     image: vllm/vllm-openai:latest
     container_name: example_apps_vllm
-    # A tiny instruct model so the demo fits a modest GPU; override with VLLM_MODEL.
-    # gpu-memory-utilization caps VRAM: vLLM's default (0.9) can exceed free memory
-    # on a shared GPU and refuse to start. 0.5 is plenty for a small model.
+    # Tiny model (override with VLLM_MODEL); --gpu-memory-utilization caps VRAM so
+    # vLLM starts on a shared GPU (its 0.9 default can exceed free memory).
     command:
       - "--model"
       - "${VLLM_MODEL:-Qwen/Qwen2.5-0.5B-Instruct}"
@@ -40,25 +50,10 @@ services:
               count: 1
               capabilities: [gpu]
     healthcheck:
-      # vLLM serves plain HTTP on 8000 and the image has curl; hit /health.
+      # The orchestrator health-polls vLLM's /health (runners.json); this gates
+      # local `depends_on` and mirrors what the orchestrator checks.
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
       interval: 5s
       timeout: 3s
       retries: 60          # model download + load can take a while
       start_period: 20s
-
-  runner:
-    build: .
-    container_name: example_apps_vllm_runner
-    # Register only once both the orchestrator and vLLM are ready.
-    depends_on:
-      orchestrator:
-        condition: service_healthy
-      vllm:
-        condition: service_healthy
-    command:
-      - python
-      - runner.py
-      - --orchestrator=https://orchestrator:8935
-      - --orchSecret=abcdef
-      - --runner-url=http://vllm:8000

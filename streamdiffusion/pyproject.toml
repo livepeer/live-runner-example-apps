@@ -1,0 +1,13 @@
+[project]
+name = "livepeer-streamdiffusion"
+version = "0.1.0"
+description = "StreamDiffusion app (new runner, trickle realtime video) for the Livepeer network."
+requires-python = ">=3.12"
+dependencies = [
+    "av",               # client: decode the input file / webcam, publish frames
+    "livepeer-gateway",
+]
+
+# livepeer-gateway is not on PyPI yet; pull it from the branch (matches echo).
+[tool.uv.sources]
+livepeer-gateway = { git = "https://github.com/livepeer/livepeer-python-gateway", branch = "rs/live-runner-session-payments" }

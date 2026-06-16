@@ -13,6 +13,9 @@ uv.lock
 .env
 .DS_Store
 
+# Model weights / compiled TensorRT engines (large, GPU-arch specific)
+models/
+
 # IDE
 .vscode
 *.code-workspace

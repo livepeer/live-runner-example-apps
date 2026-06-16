@@ -9,7 +9,7 @@ General runners are not on go-livepeer `main` yet and currently live on the `ja/
 | Example | Transport | Registration |
 | ------- | --------- | ------------ |
 | [`hello-world`](./hello-world) | HTTP (JSON request/response) | dynamic |
-| [`vllm`](./vllm) | HTTP (OpenAI API, via a local gateway) | dynamic |
+| [`vllm`](./vllm) | HTTP (OpenAI API, via a local gateway) | static |
 
 More will follow. Each example is self-contained and runs both **offchain** (free, no wallet) and **on-chain** (paid); see its README for the commands.
 

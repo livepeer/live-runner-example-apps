@@ -1,0 +1,12 @@
+{
+  "runners": [
+    {
+      "label": "streamdiffusion",
+      "app": "livepeer-sample/streamdiffusion",
+      "runner_url": "http://app:8900",
+      "health_url": "/health",
+      "capacity": 1,
+      "price_info": { "price_per_unit": 1, "pixels_per_unit": 1000, "unit": "USD" }
+    }
+  ]
+}

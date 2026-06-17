@@ -1,0 +1,47 @@
+# Offchain demo: orchestrator + the self-hosted StreamDiffusion app, attached as
+# a STATIC runner via runners.json (-liveRunnerConfig), like the vllm example.
+# The orchestrator health-polls the app's /health and routes only once engines
+# are built (warm-up-on-start). Requires an NVIDIA GPU.
+#
+#   ./build_engines.sh                 # optional pre-bake; else the app builds on first boot
+#   docker compose up -d --build       # orchestrator + streamdiffusion app
+#   uv run client.py --webcam /dev/video0 --output - | ffplay -
+
+services:
+  orchestrator:
+    extends:
+      file: ../compose.orchestrator.yml
+      service: orchestrator
+    # `extends` can't append a single flag to `command`, so the command is
+    # restated here with -liveRunnerConfig added and runners.json mounted in.
+    command:
+      - -orchestrator
+      - -useLiveRunners
+      - -serviceAddr=127.0.0.1:8935
+      - -httpAddr=0.0.0.0:8935
+      - -liveRunnerAddr=https://orchestrator:8935
+      - -orchSecret=abcdef
+      - -network=offchain
+      - -monitor=false
+      - -liveRunnerConfig=/config/runners.json
+      - -v=6
+    volumes:
+      - ./runners.json:/config/runners.json:ro
+
+  app:
+    build: .
+    container_name: example_apps_streamdiffusion
+    # StreamDiffusion needs a GPU; engines + HF cache come from ./models.
+    gpus: all
+    volumes:
+      - ./models:/models
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    # Static runner: no registration flags — only the orchestrator URL, used for
+    # create_trickle_channels once a session starts.
+    command:
+      - python
+      - runner.py
+      - --host=0.0.0.0
+      - --orchestrator=https://orchestrator:8935

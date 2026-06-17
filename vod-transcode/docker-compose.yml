@@ -1,0 +1,41 @@
+# Offchain demo: orchestrator + a VOD transcoding app that self-registers
+# (dynamic) and transcodes a posted video with ffmpeg.
+#
+#   docker compose up -d --build
+#   uv run client.py --discovery https://localhost:8935/discovery --input clip.mp4 --output out.mp4
+#
+# The orchestrator is defined once in ../compose.orchestrator.yml and pulled in
+# with `extends`. The app embeds the SDK and registers itself, like hello-world.
+# CPU (libx264) by default; see the README to enable GPU (h264_nvenc).
+
+services:
+  orchestrator:
+    extends:
+      file: ../compose.orchestrator.yml
+      service: orchestrator
+
+  app:
+    build: .
+    container_name: example_apps_vod_transcode
+    # Wait for the orchestrator's healthcheck so registration doesn't race its boot.
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    command:
+      - python
+      - runner.py
+      - --host=0.0.0.0
+      - --orchestrator=https://orchestrator:8935
+      - --orchSecret=abcdef
+      - --runner-url=http://app:5000
+      - --height=${TRANSCODE_HEIGHT:-720}
+      - --encoder=${TRANSCODE_ENCODER:-libx264}
+    # --- GPU: set TRANSCODE_ENCODER=h264_nvenc, use a CUDA ffmpeg image (README),
+    # --- and uncomment the reservation below.
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]

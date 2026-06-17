@@ -34,6 +34,7 @@ does **not** depend on the (deprecated) `ai-runner` image or its internal
 | `runner.py` | the app: warm-up build, `/health` + `/status`, creates trickle `in`/`out`, runs `sd.process` per frame |
 | `runners.json` | static config the orchestrator loads (`-liveRunnerConfig`) |
 | `client.py` | publishes a file or webcam, reads the diffused output, re-prompts live |
+| `view.sh` | live showcase: webcam → StreamDiffusion → an ffplay window (low-latency) |
 | `Dockerfile` | CUDA 12.8 / torch 2.7.1 / streamdiffusion + tensorrt + the SDK |
 | `build_engines.sh` | builds the image and compiles TensorRT engines into `./models` |
 | `docker-compose.yml` | offchain orchestrator (`-liveRunnerConfig`) + this GPU app |
@@ -72,20 +73,33 @@ docker compose up -d --build
 curl -s localhost:8900/status            # building -> ready (first boot compiles engines)
 curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # app once healthy
 
-# Stream a webcam (or a file) and watch the diffused output.
+# Stream a webcam and watch the diffused output live (opens an ffplay window).
 uv sync
-uv run client.py --webcam /dev/video0 \
-  --prompt "a cyberpunk portrait, neon lighting" \
-  --reprompt "8=an impressionist oil painting" \
-  --output - | ffplay -
+./view.sh "a cyberpunk portrait, neon lighting"        # webcam -> SD -> live window
 
 docker compose down
 ```
 
+- `view.sh` is the turnkey live showcase. Under the hood it's just the client
+  piping MPEG-TS to a low-latency player (prefers `mpv`, falls back to `ffplay`);
+  run the client directly for more control:
+  `uv run client.py --webcam /dev/video0 --prompt "..." --reprompt "8=an oil painting" --output - | mpv --profile=low-latency -`.
+- **No window / runner logs `Trickle ... channel does not exist`?** The player
+  didn't open a window, so it never drained the pipe; the client's stdout then
+  blocks and the output channel times out. It's a dead viewer, not a pipeline
+  bug. `ffplay` (SDL/X11) can fail to open under Wayland — `mpv` is more reliable
+  there. Sanity-check your player can open a window at all:
+  `mpv --force-window=immediate av://lavfi:testsrc` (or `ffplay -f lavfi -i testsrc`).
+- **Guaranteed alternative — record then play.** Skips the live pipe entirely:
+  `uv run client.py --webcam /dev/video0 --prompt "..." --max-frames 300 --output live.ts`
+  then `mpv live.ts`.
 - File instead of webcam: `uv run client.py ~/samples/clip.mp4 --output out.ts`.
 - `--reprompt SECONDS=PROMPT` (repeatable) changes the prompt live via `/update`.
-- `--video-size`, `--fps` tune webcam capture; match `--video-size` to the size
-  the engines were built for (default `512x512`).
+- `--video-size`, `--fps` tune webcam capture. The default `640x480` is a
+  near-universal native YUYV size and the app resizes it to the engine size, so
+  capture size is independent of the engines. A non-native size can make v4l2
+  fall back to MJPG and fail to decode; pass a square native size (e.g.
+  `--video-size 440x440`) to avoid the 4:3→1:1 aspect squish.
 
 ## Notes
 

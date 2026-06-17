@@ -1,0 +1,11 @@
+services:
+  orchestrator:
+    image: livepeer/go-livepeer:pr-3952
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+  signer:
+    image: livepeer/go-livepeer:pr-3952
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1

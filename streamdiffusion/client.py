@@ -19,9 +19,18 @@ from pathlib import Path
 import av
 
 from livepeer_gateway.errors import LivepeerGatewayError
-from livepeer_gateway.live_runner import run_session_payments, stop_runner_session
 from livepeer_gateway.media_output import MediaOutput
-from livepeer_gateway.media_publish import MediaPublish
+from livepeer_gateway.media_publish import MediaPublish, MediaPublishConfig, VideoOutputConfig
+
+
+def _lowlatency_publish_config(fps: float = 30.0) -> MediaPublishConfig:
+    # Trickle segments rotate on keyframes; the 2s default GOP makes each segment
+    # ~2s of video, which dominates end-to-end latency. Short GOP + segment floor
+    # flush segments ~4x/sec for near-realtime (at the cost of more keyframes).
+    return MediaPublishConfig(
+        tracks=[VideoOutputConfig(fps=fps, keyframe_interval_s=0.25)],
+        min_segment_wallclock_s=0.25,
+    )
 from livepeer_gateway.http import post_json
 from livepeer_gateway.selection import reserve_session
 
@@ -41,7 +50,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--webcam", nargs="?", const="/dev/video0", default=None, metavar="DEVICE",
                    help="Capture from a Linux v4l2 webcam (default /dev/video0).")
     p.add_argument("--fps", type=float, default=30.0)
-    p.add_argument("--video-size", default="512x512", help="Webcam capture size (default 512x512).")
+    p.add_argument("--video-size", default="640x480", help="Webcam capture size (default 640x480, a near-universal native size; the app resizes to its engine size). Pass a square native size like 440x440 to avoid aspect distortion.")
     p.add_argument("--discovery", default=DEFAULT_DISCOVERY)
     p.add_argument("--prompt", default=DEFAULT_PROMPT)
     p.add_argument("--output", default=DEFAULT_OUTPUT, help="Output file, or '-' for stdout (pipe to ffplay).")
@@ -86,7 +95,7 @@ async def _publish_file(input_path: Path, publish_url: str, *, max_frames: int =
     try:
         if not input_.streams.video:
             raise LivepeerGatewayError(f"No video stream in {input_path}")
-        publisher = MediaPublish(publish_url)
+        publisher = MediaPublish(publish_url, config=_lowlatency_publish_config())
         prev_pts_time = prev_wall = None
         try:
             for index, frame in enumerate(input_.decode(video=0), start=1):
@@ -107,19 +116,43 @@ async def _publish_file(input_path: Path, publish_url: str, *, max_frames: int =
 
 
 async def _publish_webcam(device: str, publish_url: str, *, fps: float, video_size: str, max_frames: int = 0) -> None:
-    input_ = av.open(device, format="v4l2", container_options={"framerate": str(fps), "video_size": video_size})
+    input_ = av.open(device, format="v4l2",
+                     container_options={"framerate": str(fps), "video_size": video_size, "input_format": "mjpeg"})
     try:
         if not input_.streams.video:
             raise LivepeerGatewayError(f"No video stream on {device}")
-        publisher = MediaPublish(publish_url)
+        publisher = MediaPublish(publish_url, config=_lowlatency_publish_config(fps))
         try:
             index = 0
-            for frame in input_.decode(video=0):
-                index += 1
-                if max_frames > 0 and index > max_frames:
+            decode_errors = 0
+            done = False
+            # Read packets in a thread: v4l2 demux() blocks (~1/fps per packet) in C,
+            # which would freeze the asyncio loop and starve MediaPublish's background
+            # encode/POST task, so no output segments ever get published. The file path
+            # avoids this by await asyncio.sleep()-pacing; a live camera has no such gap,
+            # so we offload the blocking read instead. We also skip the occasional
+            # malformed packet (v4l2 emits one, notably the first, that the decoder
+            # rejects with "avcodec_send_packet() returned 22").
+            demux = input_.demux(video=0)
+            while not done:
+                try:
+                    packet = await asyncio.to_thread(next, demux)
+                except StopIteration:
                     break
-                frame.pts = None  # let MediaPublish stamp wall-clock pts
-                await publisher.write_frame(frame)
+                try:
+                    frames = packet.decode()
+                except av.FFmpegError:
+                    decode_errors += 1
+                    if decode_errors > 300:
+                        raise LivepeerGatewayError(f"webcam {device}: too many decode errors, giving up")
+                    continue
+                for frame in frames:
+                    index += 1
+                    if max_frames > 0 and index > max_frames:
+                        done = True
+                        break
+                    frame.pts = None  # let MediaPublish stamp wall-clock pts
+                    await publisher.write_frame(frame)
         finally:
             await publisher.close()
     finally:
@@ -141,10 +174,13 @@ async def main() -> None:
     output_path = None if output_stdout else Path(args.output).expanduser()
     signer_url = args.signer.strip() or None
 
-    session = payment_task = reprompt_task = None
+    session = reprompt_task = None
     try:
-        session = await reserve_session(discovery_url=args.discovery, app=APP_ID, signer_url=signer_url)
-        payment_task = asyncio.create_task(run_session_payments(session, interval=args.payment_interval))
+        session = await reserve_session(
+            discovery_url=args.discovery, app=APP_ID, signer_url=signer_url,
+            payment_interval=args.payment_interval,
+        )
+        session.start_payments()  # on-chain: keep the session funded for the whole stream; no-op offchain
         _log("session_id:", session.session_id, "app_url:", session.app_url)
 
         resp = await post_json(f"{session.app_url.rstrip('/')}/stream", {"prompt": args.prompt})
@@ -159,7 +195,9 @@ async def main() -> None:
                 if output_stdout:
                     fh.flush()
 
-            async with MediaOutput(out_url, on_bytes=_write_chunk):
+            # Small window + skip-to-latest so the viewer stays on the live edge
+            # instead of buffering a growing backlog (keeps latency from creeping up).
+            async with MediaOutput(out_url, on_bytes=_write_chunk, max_segments=2):
                 if args.webcam is not None:
                     _log(f"streaming webcam {args.webcam} ({args.video_size}); ctrl-c to stop")
                     await _publish_webcam(args.webcam, in_url, fps=args.fps,
@@ -171,14 +209,14 @@ async def main() -> None:
     except LivepeerGatewayError as exc:
         raise SystemExit(f"ERROR: {exc}") from exc
     finally:
-        for task in (reprompt_task, payment_task):
-            if task is not None:
-                task.cancel()
-                with suppress(asyncio.CancelledError, Exception):
-                    await task
+        if reprompt_task is not None:
+            reprompt_task.cancel()
+            with suppress(asyncio.CancelledError, Exception):
+                await reprompt_task
         if session is not None:
+            # aclose() cancels the payment loop (if any) and stops the runner session.
             with suppress(Exception):
-                await stop_runner_session(session)
+                await session.aclose()
 
 
 if __name__ == "__main__":

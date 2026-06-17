@@ -1,0 +1,20 @@
+{
+  "runners": [
+    {
+      "label": "ollama-qwen2.5-0.5b",
+      "app": "ollama/qwen2.5-0.5b",
+      "runner_url": "http://ollama:11434",
+      "health_url": "/",
+      "capacity": 2,
+      "price_info": { "price_per_unit": 1, "pixels_per_unit": 1000, "unit": "USD" }
+    },
+    {
+      "label": "ollama-llama3.2-1b",
+      "app": "ollama/llama3.2-1b",
+      "runner_url": "http://ollama:11434",
+      "health_url": "/",
+      "capacity": 2,
+      "price_info": { "price_per_unit": 1, "pixels_per_unit": 1000, "unit": "USD" }
+    }
+  ]
+}

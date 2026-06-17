@@ -1,0 +1,37 @@
+# On-chain payment overlay for the streaming-ASR example. Layer on the base:
+#   docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d --build
+#
+# Adds the shared remote signer, re-points the orchestrator on-chain, and
+# registers the app with a price. A WebSocket rides a reserved (persistent,
+# metered) session: reserve_session pays at reserve, the meter runs while the
+# socket is open. Requires a local .env (gitignored). Then pay through the signer:
+#   uv run client.py --discovery https://localhost:8935/discovery \
+#     --signer http://localhost:7936 --file sample.wav
+
+services:
+  signer:
+    extends:
+      file: ../compose.onchain.yml
+      service: signer
+    ports:
+      - "7936:7936"
+
+  orchestrator:
+    extends:
+      file: ../compose.onchain.yml
+      service: orchestrator
+
+  # Re-declare the command to advertise a price (base file registers free).
+  app:
+    command:
+      - python
+      - runner.py
+      - --host=0.0.0.0
+      - --orchestrator=https://orchestrator:8935
+      - --orchSecret=abcdef
+      - --runner-url=http://app:5005
+      - --model=${WHISPER_MODEL:-base.en}
+      - --device=${WHISPER_DEVICE:-cpu}
+      - --compute-type=${WHISPER_COMPUTE:-int8}
+      - --price=${PRICE_PER_UNIT}
+      - --pixels-per-unit=${PIXELS_PER_UNIT}

@@ -37,8 +37,12 @@ RUN python -m streamdiffusion.tools.install-tensorrt
 # New-runner SDK + media/serving deps (av ships its own ffmpeg).
 # --ignore-requires-python: the SDK declares >=3.12 but uses no 3.12-only
 # features; StreamDiffusion pins us to 3.11, and the SDK runs fine there.
+# protobuf>=6.31: the SDK's generated lp_rpc_pb2 needs the 6.x runtime. This
+# overrides the older protobuf StreamDiffusion pulls in; only mediapipe (used by
+# ControlNet preprocessors we don't use for plain img2img) wants <5 — harmless here.
 RUN python -m pip install --no-cache-dir --ignore-requires-python \
         "livepeer-gateway @ git+https://github.com/livepeer/livepeer-python-gateway@rs/live-runner-session-payments" \
+        "protobuf>=6.31.1,<7" \
         av aiohttp pillow numpy hf_transfer
 
 WORKDIR /app

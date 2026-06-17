@@ -32,7 +32,7 @@ from aiohttp import web
 
 from livepeer_gateway.live_runner import create_trickle_channels
 from livepeer_gateway.media_output import MediaOutput
-from livepeer_gateway.media_publish import MediaPublish
+from livepeer_gateway.media_publish import MediaPublish, MediaPublishConfig, VideoOutputConfig
 
 from sd import StreamDiffusion, DEFAULT_MODEL, DEFAULT_PROMPT
 
@@ -145,7 +145,15 @@ async def _handle_stream(request: web.Request) -> web.Response:
     prompt = str(body.get("prompt", DEFAULT_PROMPT))
     await asyncio.to_thread(SD.update_prompt, prompt)  # model/res fixed; only prompt changes
 
-    publisher = MediaPublish(by_name["out"].get("internal_url") or by_name["out"]["url"])
+    # Short GOP/segment so output trickle segments flush ~4x/sec instead of the
+    # 2s default -> near-realtime latency (matched on the client's input publish).
+    publisher = MediaPublish(
+        by_name["out"].get("internal_url") or by_name["out"]["url"],
+        config=MediaPublishConfig(
+            tracks=[VideoOutputConfig(fps=30.0, keyframe_interval_s=0.25)],
+            min_segment_wallclock_s=0.25,
+        ),
+    )
 
     async def _on_frame(decoded) -> None:
         if decoded.kind != "video":
@@ -157,7 +165,14 @@ async def _handle_stream(request: web.Request) -> web.Response:
         out.time_base = decoded.frame.time_base
         await publisher.write_frame(out)
 
-    output = MediaOutput(by_name["in"].get("internal_url") or by_name["in"]["url"], on_frame=_on_frame)
+    # Small segment window + default LagPolicy.LATEST: when diffusion can't keep up
+    # with the incoming feed, skip to the newest segment instead of working through
+    # a growing backlog (which would make latency creep up the longer it runs).
+    output = MediaOutput(
+        by_name["in"].get("internal_url") or by_name["in"]["url"],
+        on_frame=_on_frame,
+        max_segments=2,
+    )
     session = StreamSession(
         session_id=session_id, in_url=by_name["in"]["url"], out_url=by_name["out"]["url"],
         output=output, publisher=publisher, prompt=prompt,

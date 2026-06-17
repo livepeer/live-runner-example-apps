@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-# Ported from the livepeer-python-gateway echo example by Josh Allmann.
-# Only change from the original: DEFAULT_DISCOVERY uses https (the shared
-# orchestrator serves a self-signed TLS cert; the SDK skips verification).
 from __future__ import annotations
 
 import argparse
@@ -14,13 +11,12 @@ from pathlib import Path
 import av
 
 from livepeer_gateway.errors import LivepeerGatewayError
-from livepeer_gateway.live_runner import run_session_payments, stop_runner_session
 from livepeer_gateway.media_output import MediaOutput
 from livepeer_gateway.media_publish import MediaPublish
 from livepeer_gateway.http import post_json
 from livepeer_gateway.selection import reserve_session
 
-DEFAULT_DISCOVERY = "https://localhost:8935/discovery"
+DEFAULT_DISCOVERY = "http://localhost:8935/discovery"
 ECHO_APP_ID = "livepeer-sample/echo"
 DEFAULT_OUTPUT = "echo-out.ts"
 BLUR_UPDATE_INTERVAL_S = 0.01

@@ -1,15 +1,4 @@
 #!/usr/bin/env python3
-# Ported from the livepeer-python-gateway echo example by Josh Allmann.
-# Changes from the original, both for running the runner in a container:
-#   1. a --host/--port flag so it binds 0.0.0.0 (orchestrator reaches it over
-#      the compose network);
-#   2. trickle plumbing uses the internal compose addresses, not the public
-#      127.0.0.1 ones the orchestrator hands out: create_trickle_channels() gets
-#      explicit session creds + the internal orchestrator URL (the
-#      Livepeer-Session-Control header is the public addr), and the runner
-#      reads/writes its channels via internal_url. The public urls go to the client.
-#   3. --price/--pixels-per-unit so it can advertise an on-chain price
-#      (offchain default 0 = free).
 from __future__ import annotations
 
 import argparse

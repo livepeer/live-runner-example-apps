@@ -1,0 +1,70 @@
+# Offchain demo: orchestrator + one Ollama server hosting several models, each
+# attached as a static runner via runners.json (-liveRunnerConfig). Ollama runs
+# on CPU or GPU; the deploy block below requests a GPU (drop it for CPU-only).
+# The gateway + OpenAI client run on the host (see README.md / gateway.py).
+#   docker compose up -d
+#   uv run gateway.py &                            # OpenAI endpoint on :8080 (host)
+#   uv run client.py --model qwen2.5:0.5b --prompt "Hello!"
+
+services:
+  orchestrator:
+    extends:
+      file: ../compose.orchestrator.yml
+      service: orchestrator
+    # `extends` can't append a single flag to `command`, so the command is
+    # restated here with -liveRunnerConfig added and runners.json mounted in.
+    command:
+      - -orchestrator
+      - -useLiveRunners
+      - -serviceAddr=127.0.0.1:8935
+      - -httpAddr=0.0.0.0:8935
+      - -liveRunnerAddr=https://orchestrator:8935
+      - -orchSecret=abcdef
+      - -network=offchain
+      - -monitor=false
+      - -liveRunnerConfig=/config/runners.json
+      - -v=6
+    volumes:
+      - ./runners.json:/config/runners.json:ro
+    depends_on:
+      ollama-pull:
+        condition: service_completed_successfully
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: example_apps_ollama
+    volumes:
+      - ollama:/root/.ollama          # persist pulled models across runs
+    # GPU is optional; remove this block to run CPU-only.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]  # talks to the server; no curl in the image
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  # One-shot: pull the models in runners.json, then exit. The orchestrator waits
+  # for this to finish so the models are loaded before any request arrives.
+  ollama-pull:
+    image: ollama/ollama:latest
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    # Single-element list: the whole script must reach `sh -c` as one argument.
+    # A scalar string here gets tokenized, so `sh -c` would see only `ollama`.
+    command:
+      - "ollama pull qwen2.5:0.5b && ollama pull llama3.2:1b"
+    restart: "no"
+
+volumes:
+  ollama:

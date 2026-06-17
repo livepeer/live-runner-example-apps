@@ -4,6 +4,9 @@ Example **apps** for the Livepeer network. An app is a container you build and p
 
 General runners are not on go-livepeer `main` yet and currently live on the `ja/live-runner` branch. Until it merges, both the orchestrator image and the SDK come from that branch.
 
+> [!IMPORTANT]
+> SSE streaming (used by the [`vllm`](./vllm) example) depends on gateway PR [#25](https://github.com/livepeer/livepeer-python-gateway/pull/25), which is not yet merged. Until it lands, streaming is only available from the SDK's `rs/live-runner-streaming` branch, not `ja/live-runner`.
+
 ## Examples
 
 | Example | Transport | Registration |

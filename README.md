@@ -47,6 +47,16 @@ On-chain runs add a **remote signer** that holds the payer wallet and mints prob
 - **Pricing is in USD**, converted to wei on-chain via the price feed. The app advertises `PRICE_PER_UNIT` (whole-number USD) per `PIXELS_PER_UNIT`; keep `PIXELS_PER_UNIT` small, because large values shrink the per-unit price below 1 wei and it floors to 0 (free). The signer accepts up to `MAX_PRICE_PER_UNIT`.
 - **Payments are probabilistic.** A call mints tickets that win with some probability; only winning tickets are redeemed on-chain. With default settings you will rarely see a redemption on a short run — that is expected.
 
+## Verifying discovery
+
+Before running a client, confirm the orchestrator actually advertises your runner with the expected price by calling `/discovery` directly:
+
+```sh
+curl -sk https://localhost:8935/discovery | jq
+```
+
+Each entry lists its `runners` with an `app`, `version`, capacity, and `price_info` (`price_per_unit` / `pixels_per_unit` in WEI). Check that your app appears and that the price matches what you configured — a `price_per_unit` of `0` means it floored to free (see the `PIXELS_PER_UNIT` note above).
+
 ## Conventions
 
 - Apps bind to `127.0.0.1` by default (safe for local runs). In a container the compose files pass `--host=0.0.0.0` so the orchestrator can reach the app.

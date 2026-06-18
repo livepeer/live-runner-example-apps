@@ -1,8 +1,8 @@
-# Livepeer example apps
+# Live runner example apps
 
-Example **apps** for the Livepeer network. An app is a container you build and put on the network: a normal HTTP or WebSocket service that exposes your endpoints. Orchestrators host and run your app via the **general runner**, and clients call it through the orchestrator using the [livepeer-gateway](https://github.com/livepeer/livepeer-python-gateway) Python SDK.
+Example **apps** for the Livepeer network. An app is a container you build and put on the network: a normal HTTP or WebSocket service that exposes your endpoints. Orchestrators host and run your app via the **live runner**, and clients call it through the orchestrator using the [livepeer-gateway](https://github.com/livepeer/livepeer-python-gateway) Python SDK.
 
-General runners are not on go-livepeer `main` yet and currently live on the `ja/live-runner` branch. Until it merges, both the orchestrator image and the SDK come from that branch.
+Live runners are not on go-livepeer `main` yet and currently live on the `ja/live-runner` branch. Until it merges, both the orchestrator image and the SDK come from that branch.
 
 > [!IMPORTANT]
 > SSE streaming (used by the [`vllm`](./vllm) example) depends on gateway PR [#25](https://github.com/livepeer/livepeer-python-gateway/pull/25), which is not yet merged. Until it lands, streaming is only available from the SDK's `rs/live-runner-streaming` branch, not `ja/live-runner`.

@@ -1,5 +1,8 @@
-# Hello-world example app.
+# Hello-world example app (http server).
 FROM python:3.12-slim
+
+# Flush stdout/stderr immediately so output isn't block-buffered in `docker logs`.
+ENV PYTHONUNBUFFERED=1
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git \
@@ -12,6 +15,6 @@ RUN pip install --no-cache-dir \
 WORKDIR /app
 COPY runner.py client.py ./
 
-EXPOSE 5000
+EXPOSE 8989
 
 CMD ["python", "runner.py"]

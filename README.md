@@ -9,12 +9,22 @@ Live runners are not on go-livepeer `main` yet and currently live on the `ja/liv
 
 ## Examples
 
-| Example | Transport | Registration |
-| ------- | --------- | ------------ |
-| [`hello-world`](./hello-world) | HTTP (JSON request/response) | dynamic |
-| [`vllm`](./vllm) | HTTP (OpenAI API, via a local gateway) | static |
+| Example | Runner mode | Registration | Transport |
+| ------- | ----------- | ------------ | --------- |
+| [`hello-world`](./hello-world) | persistent (single-shot by nature) | dynamic | HTTP (JSON request/response) |
+| [`vllm`](./vllm) | persistent (single-shot by nature) | static | HTTP + SSE (OpenAI API, via a local gateway) |
 
-More will follow. Each example is self-contained and runs both **offchain** (free, no wallet) and **on-chain** (paid); see its README for the commands.
+More will follow. Each example is self-contained and runs **offchain** (free, no wallet); most also run **on-chain** (paid). See each README for the commands.
+
+## Runner mode: persistent vs single-shot
+
+The runner mode is set at registration and **defaults to `persistent`** — both the SDK's `register_runner(...)` and the static `runners.json`. The examples set it explicitly for clarity.
+
+- **Persistent** — a held-open session billed per second of wall-clock while it's open. Best for realtime / streaming.
+- **Single-shot** — one request in, one response out. Best for batch / request-response work. (`hello-world`, `vllm` are single-shot by nature.)
+
+> [!IMPORTANT]
+> Single-shot payment isn't implemented yet ([go-livepeer#3955](https://github.com/livepeer/go-livepeer/issues/3955)), so `hello-world` and `vllm` register as **persistent**. On-chain that bills per second for the whole open session and overbills short calls, so keep them **offchain-only** until #3955 lands ([#5](https://github.com/livepeer/live-runner-example-apps/issues/5)).
 
 ## Registration: dynamic vs static
 

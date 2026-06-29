@@ -25,4 +25,4 @@ services:
       - --host=0.0.0.0
       - --orchestrator=https://orchestrator:8935
       - --orchSecret=abcdef
-      - --runner-url=http://app:5000
+      - --runner-url=http://app:8989

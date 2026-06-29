@@ -5,8 +5,9 @@ Runs an OpenAI-compatible LLM on the Livepeer network and consumes it with the *
 |              |                                            |
 | ------------ | ------------------------------------------ |
 | App id       | `vllm/qwen2.5-0.5b-instruct`               |
-| Transport    | HTTP (OpenAI `/v1/chat/completions`)       |
+| Runner mode  | persistent (single-shot by nature)         |
 | Registration | static (orchestrator config + health poll) |
+| Transport    | HTTP + SSE (OpenAI `/v1/chat/completions`) |
 | Port         | 8000 (vLLM), 8080 (gateway)                |
 
 **Requires an NVIDIA GPU** for vLLM. The default model (`Qwen/Qwen2.5-0.5B-Instruct`) is tiny so it fits a modest card can be overridden with `VLLM_MODEL`. Prerequisites (Docker, `uv`, the not-yet-released SDK) and the shared on-chain/payment setup are in the [repo README](../README.md).
@@ -26,6 +27,7 @@ The local gateway is a *client-side* component, so it runs on the host like the 
 
 ```sh
 docker compose up -d                   # pulls the vLLM + orchestrator images (slow first time)
+curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # confirm vllm/qwen2.5-0.5b-instruct registered
 uv run gateway.py &                    # OpenAI endpoint on http://localhost:8080/v1
 uv run client.py --prompt "In one sentence, what is Livepeer?"
 kill %1; docker compose down           # stop the gateway, then the stack

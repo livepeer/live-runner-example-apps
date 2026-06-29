@@ -10,7 +10,7 @@ from aiohttp import web
 from livepeer_gateway.live_runner import register_runner
 
 DEFAULT_HOST = "127.0.0.1"
-DEFAULT_PORT = 5000
+DEFAULT_PORT = 8989
 APP_ID = "livepeer-sample/hello-world"
 
 log = logging.getLogger("hello-world")
@@ -43,6 +43,7 @@ def main() -> None:
             secret=args.orchSecret,
             runner_url=args.runner_url,
             app=APP_ID,
+            mode="persistent",  # single-shot by nature; runs persistent until single-shot payment lands (go-livepeer#3955)
             price_per_unit=args.price,
             pixels_per_unit=args.pixels_per_unit,
         )
@@ -60,9 +61,7 @@ def main() -> None:
     app.router.add_post("/hello", _handle_hello)
     app.on_startup.append(_on_startup)
     app.on_cleanup.append(_on_cleanup)
-    # print=None suppresses aiohttp's stdout banner (which would block-buffer);
-    # everything goes through logging, which flushes per record.
-    web.run_app(app, host=args.host, port=DEFAULT_PORT, print=None)
+    web.run_app(app, host=args.host, port=DEFAULT_PORT)
 
 
 if __name__ == "__main__":

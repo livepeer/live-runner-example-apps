@@ -5,16 +5,22 @@ The smallest possible app on the Livepeer network: a synchronous request/respons
 |              |                                      |
 | ------------ | ------------------------------------ |
 | App id       | `livepeer-sample/hello-world`        |
-| Transport    | HTTP (JSON request/response)         |
+| Runner mode  | persistent (single-shot by nature)   |
 | Registration | dynamic (self-registers via the SDK) |
-| Port         | 5000                                 |
+| Transport    | HTTP (JSON request/response)         |
+| Port         | 8989                                 |
 
 Prerequisites (Docker, `uv`, and the not-yet-released `livepeer-gateway` SDK — pinned in `pyproject.toml`) and the shared on-chain/payment setup live in the [repo README](../README.md).
+
+## How it's wired
+
+The app self-registers with the orchestrator (`register_runner`) and exposes a single `POST /hello`, reverse-proxied through the orchestrator. The client discovers the app via `/discovery`, reserves a session, calls `/hello`, and releases the session — one request, one response. This is the base flow (discover → reserve → call → release) that every other example builds on.
 
 ## Run offchain (free)
 
 ```sh
 docker compose up -d --build
+curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # confirm livepeer-sample/hello-world registered
 uv run client.py --name livepeer --discovery https://localhost:8935/discovery
 # {'message': 'Hello, livepeer!'}
 docker compose down

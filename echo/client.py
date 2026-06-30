@@ -29,9 +29,9 @@ log = logging.getLogger("echo-client")
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the proxied echo Live Runner demo.")
-    parser.add_argument("input")
+    parser.add_argument("input", help="input video file, or - to read an MPEG-TS stream from stdin (e.g. piped from ffmpeg)")
     parser.add_argument("--discovery", default=DEFAULT_DISCOVERY)
-    parser.add_argument("--output", default=DEFAULT_OUTPUT)
+    parser.add_argument("--output", default=DEFAULT_OUTPUT, help="output file for the echoed stream, or - for stdout (e.g. piped to ffplay)")
     parser.add_argument("--radius", type=int, default=75)
     parser.add_argument("--max-frames", type=int, default=0, help="Stop after this many input video frames (0 = full file).")
     parser.add_argument("--blur", action="store_true", help="Sweep blur radius while publishing the sample.")
@@ -46,17 +46,20 @@ def _channel_url(echo_response: dict[str, object], name: str) -> str:
 
 
 async def _publish_video(
-    input_path: Path,
+    input_source: str,
     publish_url: str,
     *,
     max_frames: int = 0,
     app_url: str = "",
     blur: bool = False,
 ) -> None:
-    input_ = av.open(str(input_path))
+    # "-" = a live MPEG-TS stream on stdin; read it via libav's "pipe:0" rather than
+    # sys.stdin.buffer, whose read() blocks for a full buffer and stalls until EOF.
+    live = input_source == "-"
+    input_ = av.open("pipe:0", format="mpegts") if live else av.open(input_source)
     try:
         if not input_.streams.video:
-            raise LivepeerGatewayError(f"No video stream found in input file: {input_path}")
+            raise LivepeerGatewayError(f"No video stream found in input: {input_source}")
         publisher = MediaPublish(publish_url)
         prev_pts_time: float | None = None
         prev_wall: float | None = None
@@ -89,22 +92,18 @@ async def _publish_video(
                     blur_radius += blur_direction
                     next_update_pts_time += BLUR_UPDATE_INTERVAL_S
 
-                if (
-                    prev_pts_time is not None
-                    and prev_wall is not None
-                    and current_pts_time is not None
-                ):
-                    delta_s = current_pts_time - prev_pts_time
-                    elapsed_s = time.monotonic() - prev_wall
-                    sleep_s = max(0.0, delta_s - elapsed_s)
-                    if sleep_s > 0:
-                        await asyncio.sleep(sleep_s)
+                # Pace files to realtime (live self-paces, so sleep_s=0). sleep(0) still
+                # yields, so async POSTs/reads aren't starved by the blocking decode.
+                sleep_s = 0.0
+                if not live and prev_pts_time is not None and prev_wall is not None and current_pts_time is not None:
+                    sleep_s = max(0.0, (current_pts_time - prev_pts_time) - (time.monotonic() - prev_wall))
 
                 if current_pts_time is not None:
                     prev_pts_time = current_pts_time
                     prev_wall = time.monotonic()
 
                 await publisher.write_frame(frame)
+                await asyncio.sleep(sleep_s)
         finally:
             await publisher.close()
     finally:
@@ -114,11 +113,14 @@ async def _publish_video(
 async def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     args = _parse_args()
-    input_path = Path(args.input).expanduser()
-    output_stdout = args.output.strip().lower() in {"-", "stdout"}
+    output_stdout = args.output.strip() == "-"
     output_path = None if output_stdout else Path(args.output).expanduser()
-    if not input_path.exists():
-        raise SystemExit(f"input file does not exist: {input_path}")
+    input_source = args.input.strip()
+    if input_source != "-":
+        input_path = Path(input_source).expanduser()
+        if not input_path.exists():
+            raise SystemExit(f"input file does not exist: {input_path}")
+        input_source = str(input_path)
 
     session = None
 
@@ -139,7 +141,7 @@ async def main() -> None:
 
             async with MediaOutput(out_url, on_bytes=_write_chunk):
                 await _publish_video(
-                    input_path,
+                    input_source,
                     in_url,
                     max_frames=max(0, args.max_frames),
                     app_url=session.app_url,

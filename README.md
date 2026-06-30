@@ -13,6 +13,7 @@ Live runners are not on go-livepeer `main` yet and currently live on the `ja/liv
 | ------- | ----------- | ------------ | --------- |
 | [`hello-world`](./hello-world) | persistent (single-shot by nature) | dynamic | HTTP (JSON request/response) |
 | [`vllm`](./vllm) | persistent (single-shot by nature) | static | HTTP + SSE (OpenAI API, via a local gateway) |
+| [`ffmpeg`](./ffmpeg) | persistent (single-shot by nature) | dynamic | HTTP (JSON request/response) — multi-op tool → agent |
 
 More will follow. Each example is self-contained and runs **offchain** (free, no wallet); most also run **on-chain** (paid). See each README for the commands.
 

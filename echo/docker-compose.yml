@@ -1,0 +1,28 @@
+# End-to-end offchain demo: orchestrator + echo app (trickle realtime video).
+#
+# The orchestrator service is defined once in ../compose.orchestrator.yml and
+# pulled in with `extends`; this file only adds the app. Once up, drive it from
+# the host with the SDK client and a sample video:
+#   docker compose up -d --build
+#   uv run client.py --blur ~/samples/clip.mp4   # writes echo-out.ts
+
+services:
+  orchestrator:
+    extends:
+      file: ../compose.orchestrator.yml
+      service: orchestrator
+
+  app:
+    build: .
+    container_name: example_apps_echo
+    # Wait for the orchestrator's healthcheck so registration doesn't race its boot.
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    command:
+      - python
+      - runner.py
+      - --host=0.0.0.0
+      - --orchestrator=https://orchestrator:8935
+      - --orchSecret=abcdef
+      - --runner-url=http://app:8989

@@ -12,6 +12,7 @@ Live runners are not on go-livepeer `main` yet and currently live on the `ja/liv
 | Example | Runner mode | Registration | Transport |
 | ------- | ----------- | ------------ | --------- |
 | [`hello-world`](./hello-world) | persistent (single-shot by nature) | dynamic | HTTP (JSON request/response) |
+| [`echo`](./echo) | persistent | dynamic | trickle (realtime video) |
 | [`vllm`](./vllm) | persistent (single-shot by nature) | static | HTTP + SSE (OpenAI API, via a local gateway) |
 
 More will follow. Each example is self-contained and runs **offchain** (free, no wallet); most also run **on-chain** (paid). See each README for the commands.
@@ -20,7 +21,7 @@ More will follow. Each example is self-contained and runs **offchain** (free, no
 
 The runner mode is set at registration and **defaults to `persistent`** — both the SDK's `register_runner(...)` and the static `runners.json`. The examples set it explicitly for clarity.
 
-- **Persistent** — a held-open session billed per second of wall-clock while it's open. Best for realtime / streaming.
+- **Persistent** — a held-open session billed per second of wall-clock while it's open. Best for realtime / streaming. (`echo`.)
 - **Single-shot** — one request in, one response out. Best for batch / request-response work. (`hello-world`, `vllm` are single-shot by nature.)
 
 > [!IMPORTANT]

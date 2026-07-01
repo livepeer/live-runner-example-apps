@@ -72,5 +72,5 @@ curl -N http://localhost:8080/v1/chat/completions \
 
 ## Run on-chain (paid)
 
-> [!IMPORTANT]
-> Single-shot on-chain payment is not implemented yet ([go-livepeer#3955](https://github.com/livepeer/go-livepeer/issues/3955)). Until it lands, vLLM is **offchain-only**, and the direct route above skips payment. This section — the paid path and the per-call billing model — is finalized once single-shot billing ships.
+<!-- TODO(go-livepeer#3955): document the single-shot on-chain paid path (per-call billing, how the direct route / gateway pays) once single-shot billing ships. This PR merges only after #3955 lands, so replace this with the real instructions and undraft — do not merge with this comment in place. -->
+_Paid single-shot path — pending [go-livepeer#3955](https://github.com/livepeer/go-livepeer/issues/3955)._

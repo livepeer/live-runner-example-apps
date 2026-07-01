@@ -5,9 +5,11 @@ description = "Multi-op ffmpeg tool example app (tool -> agent) for the Livepeer
 requires-python = ">=3.12"
 dependencies = [
     "livepeer-gateway",
+    "livepeer-gateway-client",
     "mcp",  # for mcp_server.py — the Claude (MCP) integration
 ]
 
 # livepeer-gateway is not on PyPI yet; pull it from the branch.
 [tool.uv.sources]
-livepeer-gateway = { git = "https://github.com/livepeer/livepeer-python-gateway", branch = "ja/live-runner" }
+livepeer-gateway = { git = "https://github.com/livepeer/livepeer-python-gateway", rev = "81ee7bee7932afe94c882a560e5a8bdba1f2cb04" }
+livepeer-gateway-client = { path = "/home/elite/repos/livepeer-gateway", editable = true }

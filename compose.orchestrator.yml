@@ -13,8 +13,7 @@
 
 services:
   orchestrator:
-    # TODO: remove when upstream is merged.
-    image: livepeer/go-livepeer:pr-3968
+    image: livepeer/go-livepeer:ja-live-runner
     container_name: example_apps_orchestrator
     # Two distinct addresses:
     #   serviceAddr    advertised to external clients in discovery responses,

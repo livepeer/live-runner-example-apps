@@ -138,7 +138,8 @@ async def _handle_echo(request: web.Request) -> web.Response:
             raise web.HTTPConflict(text="echo runner already has an active session")
         return web.json_response(state.to_json())
 
-    # TODO: Requires go-livepeer#3968 to ensure request format works with docker.
+    # Pass the request so the SDK opens channels using the orchestrator's
+    # Session-Control header, whose URLs are reachable from the runner's network.
     channels = await request.app["registration"].create_trickle_channels(
         request,
         [

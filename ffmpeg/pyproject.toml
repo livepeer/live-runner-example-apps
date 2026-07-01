@@ -9,7 +9,7 @@ dependencies = [
     "mcp",  # for mcp_server.py — the Claude (MCP) integration
 ]
 
-# livepeer-gateway is not on PyPI yet; pull it from the branch.
+# Neither package is on PyPI yet; pull them from git by pinned commit.
 [tool.uv.sources]
 livepeer-gateway = { git = "https://github.com/livepeer/livepeer-python-gateway", rev = "81ee7bee7932afe94c882a560e5a8bdba1f2cb04" }
-livepeer-gateway-client = { path = "/home/elite/repos/livepeer-gateway", editable = true }
+livepeer-gateway-client = { git = "https://github.com/pymthouse/livepeer-gateway-client", rev = "8035d8514bf5048f380e48b98849472492de2e27" }

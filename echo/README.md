@@ -32,15 +32,15 @@ The client publishes a video stream into the echo and writes the echoed result b
 **From a file** — writes the result to `echo-out.ts`:
 
 ```sh
-uv run client.py --blur --discovery https://localhost:8935/discovery ~/samples/bbb_720p.mp4
+uv run client.py --mode blur --discovery https://localhost:8935/discovery ~/samples/bbb_720p.mp4
 ```
 
 **Live from ffmpeg's test pattern** — no file needed; watch the test counter echo back in real time:
 
 ```sh
-ffmpeg -re -f lavfi -i testsrc=size=1280x720:rate=30 -c:v libx264 -pix_fmt yuv420p -f mpegts - \
-  | uv run client.py - --discovery https://localhost:8935/discovery --output - \
-  | ffplay -
+ffmpeg -re -f lavfi -i testsrc=size=1280x720:rate=30 -c:v libx264 -tune zerolatency -preset ultrafast -pix_fmt yuv420p -f mpegts - \
+  | uv run client.py - --mode blur --discovery https://localhost:8935/discovery --output - \
+  | ffplay -fflags nobuffer -flags low_delay -framedrop -i -
 ```
 
 **From a webcam** — same pipe; just point ffmpeg at your camera. Device numbers vary (a bare `/dev/video0` often isn't the camera, and some cameras expose several nodes), so find and confirm yours first:
@@ -50,14 +50,17 @@ v4l2-ctl --list-devices              # list cameras and their /dev/videoN
 ffplay -f v4l2 -i /dev/video0        # preview a node to confirm it's your camera (q to quit); try video1, video2, ...
 
 ffmpeg -f v4l2 -input_format mjpeg -framerate 30 -video_size 1280x720 -i /dev/video0 \
-  -c:v libx264 -pix_fmt yuv420p -f mpegts - \
-  | uv run client.py - --discovery https://localhost:8935/discovery --output - \
-  | ffplay -
+  -c:v libx264 -tune zerolatency -preset ultrafast -pix_fmt yuv420p -f mpegts - \
+  | uv run client.py - --mode blur --discovery https://localhost:8935/discovery --output - \
+  | ffplay -fflags nobuffer -flags low_delay -framedrop -i -
 ```
 
 Swap `/dev/video0` for your node. If that size/format isn't supported, list the camera's modes with `ffmpeg -f v4l2 -list_formats all -i /dev/videoN`. macOS: `-f avfoundation -framerate 30 -i 0`; Windows: `-f dshow -i video="<name>"`.
 
+The `ffplay` low-delay flags (`-fflags nobuffer -flags low_delay -framedrop`) keep the preview close to realtime; drop them and it buffers.
+
 Stop the stack with `docker compose down`.
 
-- `--blur` sweeps the blur radius live (drives `/update`); drop it for a plain echo. `--radius N` sets the initial strength, `--max-frames N` stops early.
-- Add `--blur` to any of the above to see the echo visibly transform the stream, not just pass it through.
+- `--mode` picks the transform: `echo` (passthrough, the default), `gray`, `invert`, or `blur`. Use `--mode blur` on any command above to see the echo visibly transform the stream.
+- `blur` sweeps the radius `0 -> max -> 0` live (driving `/update`); `--blur-period N` sets the seconds per sweep cycle (default 2; larger is slower). `gray`/`invert` are static.
+- `--radius N` sets the initial blur strength, `--max-frames N` stops early.

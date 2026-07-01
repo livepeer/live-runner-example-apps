@@ -21,8 +21,8 @@ from livepeer_gateway.selection import reserve_session
 DEFAULT_DISCOVERY = "http://localhost:8935/discovery"
 APP_ID = "livepeer-sample/echo"
 DEFAULT_OUTPUT = "echo-out.ts"
-BLUR_UPDATE_INTERVAL_S = 0.01
 MAX_BLUR_RADIUS = 100
+MODES = ("echo", "gray", "invert", "blur")
 
 log = logging.getLogger("echo-client")
 
@@ -34,7 +34,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--output", default=DEFAULT_OUTPUT, help="output file for the echoed stream, or - for stdout (e.g. piped to ffplay)")
     parser.add_argument("--radius", type=int, default=75)
     parser.add_argument("--max-frames", type=int, default=0, help="Stop after this many input video frames (0 = full file).")
-    parser.add_argument("--blur", action="store_true", help="Sweep blur radius while publishing the sample.")
+    parser.add_argument("--mode", choices=MODES, default="echo", help="Transform the runner applies: echo (passthrough), gray, invert, or blur. blur sweeps the radius; the rest are static.")
+    parser.add_argument("--blur-period", type=float, default=2.0, help="Seconds per blur sweep cycle (0->max->0); only used with --mode blur.")
     return parser.parse_args()
 
 
@@ -51,7 +52,8 @@ async def _publish_video(
     *,
     max_frames: int = 0,
     app_url: str = "",
-    blur: bool = False,
+    mode: str = "echo",
+    blur_period: float = 2.0,
 ) -> None:
     # "-" = a live MPEG-TS stream on stdin; read it via libav's "pipe:0" rather than
     # sys.stdin.buffer, whose read() blocks for a full buffer and stalls until EOF.
@@ -66,6 +68,8 @@ async def _publish_video(
         next_update_pts_time: float | None = None
         blur_radius = 0
         blur_direction = 1
+        # blur sweeps 0->max->0 (2*MAX steps); spread one full cycle over blur_period.
+        update_interval = blur_period / (2 * MAX_BLUR_RADIUS)
 
         try:
             for index, frame in enumerate(input_.decode(video=0), start=1):
@@ -78,7 +82,7 @@ async def _publish_video(
                         next_update_pts_time = current_pts_time
 
                 while (
-                    blur
+                    mode == "blur"
                     and app_url
                     and current_pts_time is not None
                     and next_update_pts_time is not None
@@ -90,7 +94,7 @@ async def _publish_video(
                     elif blur_radius == 0:
                         blur_direction = 1
                     blur_radius += blur_direction
-                    next_update_pts_time += BLUR_UPDATE_INTERVAL_S
+                    next_update_pts_time += update_interval
 
                 # Pace files to realtime (live self-paces, so sleep_s=0). sleep(0) still
                 # yields, so async POSTs/reads aren't starved by the blocking decode.
@@ -128,7 +132,7 @@ async def main() -> None:
         session = await reserve_session(discovery_url=args.discovery, app=APP_ID)
         log.info("session_id=%s app_url=%s", session.session_id, session.app_url)
 
-        echo = await post_json(f"{session.app_url.rstrip('/')}/echo", {"radius": args.radius})
+        echo = await post_json(f"{session.app_url.rstrip('/')}/echo", {"radius": args.radius, "mode": args.mode})
         in_url = _channel_url(echo, "in")
         out_url = _channel_url(echo, "out")
         log.info("in=%s out=%s", in_url, out_url)
@@ -145,7 +149,8 @@ async def main() -> None:
                     in_url,
                     max_frames=max(0, args.max_frames),
                     app_url=session.app_url,
-                    blur=args.blur,
+                    mode=args.mode,
+                    blur_period=args.blur_period,
                 )
                 log.info("publish complete; waiting for output to drain...")
             fh.flush()

@@ -1,0 +1,38 @@
+# Offchain demo: orchestrator + daydream's StreamDiffusion server, attached as a
+# STATIC runner via runners.json. The orchestrator health-polls /api/queue and
+# reverse-proxies the app's native HTTP/WS endpoints to the client. Requires an
+# NVIDIA GPU. The app contains no Livepeer code -- contrast ../streamdiffusion,
+# which embeds the SDK and reads/writes trickle in a runner.py.
+#
+#   docker compose up -d --build       # orchestrator + StreamDiffusion server
+#   ffmpeg ... -f image2pipe -c:v mjpeg - | uv run client.py - --output - | ffplay -f mjpeg -i -
+
+services:
+  orchestrator:
+    extends:
+      file: ../compose.orchestrator.yml
+      service: orchestrator
+    command:
+      - -orchestrator
+      - -useLiveRunners
+      - -serviceAddr=127.0.0.1:8935
+      - -httpAddr=0.0.0.0:8935
+      - -liveRunnerAddr=https://orchestrator:8935
+      - -orchSecret=abcdef
+      - -network=offchain
+      - -monitor=false
+      - -liveRunnerConfig=/config/runners.json
+      - -v=6
+    volumes:
+      - ./runners.json:/config/runners.json:ro
+
+  app:
+    build: .
+    container_name: example_apps_streamdiffusion_ws
+    # StreamDiffusion needs a GPU; engines + HF cache come from ./models.
+    gpus: all
+    volumes:
+      - ./models:/models
+    depends_on:
+      orchestrator:
+        condition: service_healthy

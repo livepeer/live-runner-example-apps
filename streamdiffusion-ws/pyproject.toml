@@ -1,0 +1,13 @@
+[project]
+name = "livepeer-streamdiffusion-ws"
+version = "0.1.0"
+description = "Reverse-proxied StreamDiffusion app (WebSocket, third-party container) for the Livepeer network."
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp",          # client: drive the app's WS + MJPEG stream through the proxy
+    "livepeer-gateway",
+]
+
+# livepeer-gateway is not on PyPI yet; pull it from the branch (matches the other examples).
+[tool.uv.sources]
+livepeer-gateway = { git = "https://github.com/livepeer/livepeer-python-gateway", branch = "rs/live-runner-session-payments" }

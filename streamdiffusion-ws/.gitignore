@@ -1,0 +1,4 @@
+models/
+*.mjpeg
+__pycache__/
+.venv/

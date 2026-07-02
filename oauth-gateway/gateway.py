@@ -51,6 +51,9 @@ log = logging.getLogger("oauth-gateway")
 
 BILLING_URL = os.environ.get("LIVEPEER_BILLING_URL", "").strip()
 CLIENT_ID = os.environ.get("LIVEPEER_CLIENT_ID", "").strip() or None
+# FORCE wins over whatever the exchange returns — set it to pin local runners
+# (the builder-api exchange may hand back a hosted-network discovery URL).
+FORCE_DISCOVERY = os.environ.get("GATEWAY_FORCE_DISCOVERY", "").strip() or None
 FALLBACK_DISCOVERY = os.environ.get("LIVEPEER_DISCOVERY", "https://localhost:8935/discovery").strip()
 FALLBACK_SIGNER = os.environ.get("LIVEPEER_SIGNER", "").strip() or None
 DEFAULT_APP = os.environ.get("GATEWAY_APP", "vllm/qwen2.5-0.5b-instruct").strip()

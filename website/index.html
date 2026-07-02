@@ -20,6 +20,10 @@
            font-weight:650; font-size:15px; cursor:pointer; }
   button.ghost { background:transparent; color:var(--fg); border:1px solid var(--line); }
   button:disabled { opacity:.4; cursor:not-allowed; }
+  .wip-wrap { position:relative; }
+  .wip-wrap pre { user-select:none; -webkit-user-select:none; opacity:.3; filter:grayscale(1); pointer-events:none; }
+  .wip-overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-weight:650; font-size:16px; color:var(--fg); letter-spacing:.5px; background:rgba(11,13,14,.35); border-radius:8px; }
   .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
   .key { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; background:#0b0d0e; border:1px solid var(--line);
          border-radius:8px; padding:10px 12px; word-break:break-all; color:var(--accent); }
@@ -88,8 +92,10 @@
       <ul id="mcp-tools" class="muted" style="margin:6px 0 0; padding-left:18px"></ul>
     </div>
     <div class="pane hidden" data-p="sdk">
-      <p class="muted" style="margin:0 0 8px">⚠️ Still finalising. The raw SDK talks to the network directly (local service URLs), so it's for running your own stack — not the hosted URL + token flow above.</p>
-      <pre id="snip-sdk"></pre>
+      <div class="wip-wrap">
+        <pre id="snip-sdk"></pre>
+        <div class="wip-overlay">Still finalising</div>
+      </div>
     </div>
   </div>
 

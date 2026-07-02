@@ -6,7 +6,7 @@
       "runner_url": "http://vllm:8000",
       "health_url": "/health",
       "mode": "persistent",
-      "capacity": 1,
+      "capacity": 8,
       "price_info": { "price_per_unit": 1, "pixels_per_unit": 1000, "unit": "USD" }
     }
   ]

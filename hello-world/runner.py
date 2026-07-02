@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+"""hello-world app: a normal aiohttp service, made callable on the Livepeer network.
+
+Livepeer integration (grep `# Livepeer:`):
+  1. register_runner()     — announce the app to the orchestrator (startup)
+  2. registration.close()  — deregister (cleanup)
+
+/hello is an ordinary HTTP handler; being on the network doesn't change how you write it.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -21,9 +30,21 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--orchestrator", default="http://localhost:8935")
     parser.add_argument("--orchSecret", default="abcdef")
     parser.add_argument("--runner-url", default=f"http://{DEFAULT_HOST}:{DEFAULT_PORT}")
-    parser.add_argument("--host", default=DEFAULT_HOST, help="Bind address (use 0.0.0.0 in containers).")
-    parser.add_argument("--price", type=int, default=0, help="Price in USD per pixels-per-unit (0 = free, the offchain default).")
-    parser.add_argument("--pixels-per-unit", type=int, default=1, help="Scale factor: price is charged per this many units.")
+    parser.add_argument(
+        "--host", default=DEFAULT_HOST, help="Bind address (use 0.0.0.0 in containers)."
+    )
+    parser.add_argument(
+        "--price",
+        type=int,
+        default=0,
+        help="Price in USD per pixels-per-unit (0 = free, the offchain default).",
+    )
+    parser.add_argument(
+        "--pixels-per-unit",
+        type=int,
+        default=1,
+        help="Scale factor: price is charged per this many units.",
+    )
     return parser.parse_args()
 
 
@@ -34,11 +55,13 @@ async def _handle_hello(request: web.Request) -> web.Response:
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+    )
     args = _parse_args()
 
     async def _on_startup(app: web.Application) -> None:
-        app["registration"] = await register_runner(
+        app["registration"] = await register_runner(  # Livepeer: 1
             args.orchestrator,
             secret=args.orchSecret,
             runner_url=args.runner_url,
@@ -55,7 +78,7 @@ def main() -> None:
 
     async def _on_cleanup(app: web.Application) -> None:
         with suppress(Exception):
-            await app["registration"].close()
+            await app["registration"].close()  # Livepeer: 2
 
     app = web.Application()
     app.router.add_post("/hello", _handle_hello)

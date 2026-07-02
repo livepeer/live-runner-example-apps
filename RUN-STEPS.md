@@ -42,12 +42,23 @@ Have ready: John's `.env` saved to a file; a **chain** choice (Arbitrum Sepolia 
 
 ## Step 1 — Your Auth0 · folder: BACKEND/auth0-provisioner/provision
 
+### 1a. Create a free Auth0 account + tenant (one-time, in the browser)
+
+1. Go to https://auth0.com/signup and sign up (free plan is enough). You can sign up with Google/GitHub.
+2. During setup Auth0 creates your first **tenant**. Pick a name + region; the region sets the domain suffix (`us`/`eu`/`au`). Your tenant domain looks like `yourname.us.auth0.com` — **note it exactly**, that's `YOURTENANT.us.auth0.com` below.
+3. Verify your email if prompted.
+4. (Optional) Enable a Google social connection: Dashboard → Authentication → Social → Google, toggle on — so end users can "Sign in with Google" later. Username/password works without this.
+
+You do NOT create any apps/APIs by hand — `bootstrap.sh` does that in 1b.
+
+### 1b. Log in from the CLI + provision
+
 ```sh
-auth0 login
+auth0 login                          # choose: As a user (browser device-code)
 auth0 tenants use YOURTENANT.us.auth0.com
 ./bootstrap.sh
 ./bootstrap-credentials-exchange-action.sh
-cat .env.livepeer            # note the DEMO_APP_AUTH0_* ids + secret + AUTH0_ISSUER
+cat .env.livepeer                    # note the DEMO_APP_AUTH0_* ids + secret + AUTH0_ISSUER
 ```
 **Pass:** `.env.livepeer` exists and has `DEMO_APP_AUTH0_PUBLIC_CLIENT_ID`, `_M2M_CLIENT_ID`, `_M2M_CLIENT_SECRET`.
 

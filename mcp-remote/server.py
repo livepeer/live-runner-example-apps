@@ -23,6 +23,7 @@ from __future__ import annotations
 import base64
 import contextvars
 import os
+import time
 
 import requests
 import uvicorn
@@ -39,6 +40,11 @@ CLIENT_ID = os.environ.get("LIVEPEER_CLIENT_ID", "").strip() or None
 FALLBACK_DISCOVERY = os.environ.get("LIVEPEER_DISCOVERY", "https://localhost:8935/discovery")
 APP_ID = "livepeer/ffmpeg"
 PORT = int(os.environ.get("MCP_PORT", "9000"))
+# The MCP server runs on the operator's machine, so it writes outputs here and
+# returns the path (images are also returned inline for Claude to display).
+OUTPUT_DIR = os.path.abspath(os.environ.get("MCP_OUTPUT_DIR", "mcp-outputs"))
+EXT = {"transcode": "mp4", "clip": "mp4", "crop": "mp4", "convert": "mp4",
+       "gif": "gif", "thumbnail": "jpg", "extract_audio": "m4a"}
 
 # Per-request bearer token, set by middleware, read by tools.
 _current_key: contextvars.ContextVar[str | None] = contextvars.ContextVar("current_key", default=None)
@@ -67,7 +73,7 @@ def _signer_auth():
     return p.signer_url, dict(p.headers), discovery
 
 
-async def _run_op(input_url: str, op: str, **params) -> str:
+async def _run_op(input_url: str, op: str, **params):
     try:
         signer_url, signer_headers, discovery = _signer_auth()
     except Exception as exc:
@@ -94,12 +100,23 @@ async def _run_op(input_url: str, op: str, **params) -> str:
         return f"probe (paid on Livepeer): {data}"
     if "output_b64" not in data:
         return f"error: {data.get('error', data)}"
-    return (f"{op} done on Livepeer: {data.get('bytes', 0)} bytes "
-            f"({data.get('media_type', '?')}) — paid + metered to your account")
+
+    raw = base64.b64decode(data["output_b64"])
+    media = data.get("media_type", "")
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    path = os.path.join(OUTPUT_DIR, f"{op}_{int(time.time()*1000)}.{EXT.get(op, 'bin')}")
+    with open(path, "wb") as f:
+        f.write(raw)
+    note = f"{op} done on Livepeer: {len(raw)} bytes ({media}) — paid + metered. Saved to {path}"
+    # Return images inline so Claude can display them; note carries the saved path.
+    if media.startswith("image/"):
+        from mcp.server.fastmcp import Image
+        return [Image(data=raw, format=EXT.get(op, "png")), note]
+    return note
 
 
 @mcp.tool()
-async def ffmpeg_transcode(input_url: str, height: int = 0, quality: int = 23) -> str:
+async def ffmpeg_transcode(input_url: str, height: int = 0, quality: int = 23):
     """Transcode a video (by URL) on Livepeer. height=0 keeps source; lower quality = better."""
     params: dict = {"quality": quality}
     if height:
@@ -108,43 +125,43 @@ async def ffmpeg_transcode(input_url: str, height: int = 0, quality: int = 23) -
 
 
 @mcp.tool()
-async def ffmpeg_clip(input_url: str, start: float, end: float) -> str:
+async def ffmpeg_clip(input_url: str, start: float, end: float):
     """Cut the segment [start, end] seconds from a video URL, paid on Livepeer."""
     return await _run_op(input_url, "clip", start=start, end=end)
 
 
 @mcp.tool()
-async def ffmpeg_thumbnail(input_url: str, at: float = 0.0) -> str:
+async def ffmpeg_thumbnail(input_url: str, at: float = 0.0):
     """Grab a JPEG thumbnail at `at` seconds from a video URL, paid on Livepeer."""
     return await _run_op(input_url, "thumbnail", at=at)
 
 
 @mcp.tool()
-async def ffmpeg_extract_audio(input_url: str) -> str:
+async def ffmpeg_extract_audio(input_url: str):
     """Extract the audio track (m4a) from a video URL, paid on Livepeer."""
     return await _run_op(input_url, "extract_audio")
 
 
 @mcp.tool()
-async def ffmpeg_gif(input_url: str, fps: int = 12, height: int = 240) -> str:
+async def ffmpeg_gif(input_url: str, fps: int = 12, height: int = 240):
     """Make an animated GIF from a video URL, paid on Livepeer."""
     return await _run_op(input_url, "gif", fps=fps, height=height)
 
 
 @mcp.tool()
-async def ffmpeg_crop(input_url: str, width: int, height: int, x: int = 0, y: int = 0) -> str:
+async def ffmpeg_crop(input_url: str, width: int, height: int, x: int = 0, y: int = 0):
     """Crop a video URL to width x height at offset (x, y), paid on Livepeer."""
     return await _run_op(input_url, "crop", width=width, height=height, x=x, y=y)
 
 
 @mcp.tool()
-async def ffmpeg_convert(input_url: str, format: str = "mp4", quality: int = 23) -> str:
+async def ffmpeg_convert(input_url: str, format: str = "mp4", quality: int = 23):
     """Convert a video URL to another container/format, paid on Livepeer."""
     return await _run_op(input_url, "convert", format=format, quality=quality)
 
 
 @mcp.tool()
-async def ffmpeg_probe(input_url: str) -> str:
+async def ffmpeg_probe(input_url: str):
     """Probe a media URL (format, streams, duration), paid on Livepeer."""
     return await _run_op(input_url, "probe")
 

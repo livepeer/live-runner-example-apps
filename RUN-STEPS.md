@@ -146,15 +146,50 @@ docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d orchest
 curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # vllm/qwen2.5-0.5b-instruct
 
 cd ../oauth-gateway
-LIVEPEER_BILLING_URL=http://localhost:8095 LIVEPEER_CLIENT_ID=<PUBLIC_CLIENT_ID> \
+LIVEPEER_BILLING_URL=http://localhost:8095 LIVEPEER_CLIENT_ID=OZFJrZRxbv2prI5VotOivrlmuRhR1ySo \
 GATEWAY_APP=vllm/qwen2.5-0.5b-instruct GATEWAY_FORCE_DISCOVERY=https://localhost:8935/discovery \
 uv run gateway.py &
-
-python -c "from openai import OpenAI; print(OpenAI(base_url='http://localhost:8080/v1', api_key='pmth_ALICE_KEY').chat.completions.create(model='Qwen/Qwen2.5-0.5B-Instruct', messages=[{'role':'user','content':'Hello!'}]).choices[0].message.content)"
 ```
-**Pass:** a completion prints; usage appears on Alice in OpenMeter.
+Then run the **demo script** (mints an account + makes the paid call; no manual key needed):
+```sh
+cd /home/ricks/development/livepeer/ea-worktrees/clearinghouse-demo
+uv run demo.py                       # mint 'alice', paid call
+uv run demo.py --user bob            # a second account -> separate metering
+uv run demo.py --key sk_... --stream # reuse a key, stream tokens
+```
+**Pass:** a completion prints; the signer logs `auth_id=…:alice Signed`, and usage appears on that account in OpenMeter.
+
+Watch payment happen live:
+```sh
+( cd /home/ricks/development/livepeer/ch-worktrees/pr57-builder-api && docker compose logs -f remote-signer | grep --line-buffered "auth_id=" )
+```
+
+## Step 5b — Ollama instead of vLLM (multi-model, same key)
+
+Same gateway, an Ollama runner. Only one runner at a time (both use `:8935`), so stop vLLM first.
+
+```sh
+cd /home/ricks/development/livepeer/ea-worktrees/clearinghouse-demo/vllm
+docker compose -f docker-compose.yml -f docker-compose.onchain.yml down
+
+cd ../ollama
+# ollama/.env: same NETWORK / ETH_RPC_URL / ORCH_* as vllm/.env
+docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d
+curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # ollama/qwen2.5-0.5b, ollama/llama3.2-1b
+
+cd ../oauth-gateway
+LIVEPEER_BILLING_URL=http://localhost:8095 LIVEPEER_CLIENT_ID=OZFJrZRxbv2prI5VotOivrlmuRhR1ySo \
+GATEWAY_APP=ollama/qwen2.5-0.5b \
+GATEWAY_MODEL_MAP='{"qwen2.5:0.5b":"ollama/qwen2.5-0.5b","llama3.2:1b":"ollama/llama3.2-1b"}' \
+GATEWAY_FORCE_DISCOVERY=https://localhost:8935/discovery \
+uv run gateway.py &
+
+cd .. && uv run demo.py --user alice --model qwen2.5:0.5b
+uv run demo.py --user alice --model llama3.2:1b     # switch model, same key
+```
+`GATEWAY_MODEL_MAP` maps the OpenAI `model` name to the Livepeer app id, so one key + one endpoint serves every model. **Pass:** both models reply; signer logs `auth_id=…` per call.
 
 ## Step 6 — ffmpeg MCP (same key) · folder: DEMO/ffmpeg
 
-Stop the vLLM stack first (frees `:8935`). Then bring up ffmpeg and `claude mcp add …` per `START-HERE.md` Part D, using `LIVEPEER_API_KEY=pmth_ALICE_KEY`.
-**Pass:** Claude runs a transcode; usage lands on the same Alice balance.
+Stop the LLM stack first (frees `:8935`). Then bring up ffmpeg and `claude mcp add …` per `START-HERE.md` Part D, using `LIVEPEER_API_KEY=<same sk_ key>`.
+**Pass:** Claude runs a transcode; usage lands on the same account's balance.

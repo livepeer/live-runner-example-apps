@@ -19,6 +19,7 @@
   button { background:var(--accent); color:#04120b; border:0; border-radius:10px; padding:11px 18px;
            font-weight:650; font-size:15px; cursor:pointer; }
   button.ghost { background:transparent; color:var(--fg); border:1px solid var(--line); }
+  button:disabled { opacity:.4; cursor:not-allowed; }
   .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
   .key { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; background:#0b0d0e; border:1px solid var(--line);
          border-radius:8px; padding:10px 12px; word-break:break-all; color:var(--accent); }
@@ -66,15 +67,16 @@
     <div class="row">
       <span class="key" id="apikey">…</span>
       <button class="ghost" id="copy">Copy</button>
+      <button class="ghost" id="regen" disabled title="Coming soon">Regenerate (soon)</button>
     </div>
-    <p class="muted">One key, all three surfaces. Shown once — store it safely.</p>
+    <p class="muted">One key, all three surfaces. Shown once — store it safely. Lost it? Key rotation is coming soon.</p>
   </div>
 
   <div class="card">
     <div class="tabs">
       <div class="tab active" data-t="openai">OpenAI</div>
       <div class="tab" data-t="claude">Claude (MCP)</div>
-      <div class="tab" data-t="sdk">SDK</div>
+      <div class="tab" data-t="sdk" title="Still finalising">SDK</div>
     </div>
     <div class="pane" data-p="openai">
       <pre id="snip-openai"></pre>
@@ -85,7 +87,10 @@
       <p class="muted" style="margin-top:12px">Tools this MCP server exposes:</p>
       <ul id="mcp-tools" class="muted" style="margin:6px 0 0; padding-left:18px"></ul>
     </div>
-    <div class="pane hidden" data-p="sdk"><pre id="snip-sdk"></pre></div>
+    <div class="pane hidden" data-p="sdk">
+      <p class="muted" style="margin:0 0 8px">⚠️ Still finalising. The raw SDK talks to the network directly (local service URLs), so it's for running your own stack — not the hosted URL + token flow above.</p>
+      <pre id="snip-sdk"></pre>
+    </div>
   </div>
 
   <p class="muted">When your $5 runs out every surface returns <code>402</code> with a link to add a card.</p>

@@ -131,7 +131,8 @@ curl -sS -u "$DEMO_APP_AUTH0_M2M_CLIENT_ID:$DEMO_APP_AUTH0_M2M_CLIENT_SECRET" \
 
 ```sh
 export LIVEPEER_BILLING_URL=http://localhost:8095
-export LIVEPEER_CLIENT_ID=<DEMO_APP_AUTH0_PUBLIC_CLIENT_ID>
+# pull your public client id straight from the backend .env:
+export LIVEPEER_CLIENT_ID=$(grep '^DEMO_APP_AUTH0_PUBLIC_CLIENT_ID=' /home/ricks/development/livepeer/ch-worktrees/pr57-builder-api/.env | cut -d= -f2)
 uv run exchange_test.py pmth_ALICE_KEY
 ```
 **Pass:** prints `EXCHANGE OK` with a `signer_url` + Bearer `headers`. (A `402` here = the $5 gate working — also a good signal.)

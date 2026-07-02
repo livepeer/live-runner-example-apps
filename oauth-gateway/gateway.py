@@ -87,7 +87,7 @@ async def _resolve(api_key: str):
     provider = SignerTokenProvider(billing_url=BILLING_URL, api_key=api_key, client_id=CLIENT_ID)
     provider.refresh()
     signer_url = provider.signer_url or FALLBACK_SIGNER
-    discovery_url = getattr(provider, "discovery_url", None) or FALLBACK_DISCOVERY
+    discovery_url = FORCE_DISCOVERY or getattr(provider, "discovery_url", None) or FALLBACK_DISCOVERY
     return provider, signer_url, dict(provider.headers), discovery_url
 
 

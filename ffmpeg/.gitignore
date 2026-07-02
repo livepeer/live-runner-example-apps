@@ -1,0 +1,13 @@
+# Local test media + outputs — never commit binaries to the example.
+*.mp4
+*.m4a
+*.aac
+*.mp3
+*.gif
+*.jpg
+*.jpeg
+*.png
+*.mkv
+*.mov
+*.webm
+*.ts

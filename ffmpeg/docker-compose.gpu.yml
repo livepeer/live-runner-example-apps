@@ -1,0 +1,25 @@
+# GPU overlay — enable NVIDIA GPU acceleration by layering this on the base (and
+# optionally the on-chain) compose:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+#   # with payments too:
+#   docker compose -f docker-compose.yml -f docker-compose.onchain.yml -f docker-compose.gpu.yml up -d --build
+#
+# It only *adds* GPU access and makes h264_nvenc the default encoder, so it
+# composes cleanly with the other files (no `command` override to clash with the
+# on-chain overlay). Requires the NVIDIA Container Toolkit on the host. The image's
+# ffmpeg already includes h264_nvenc — no special CUDA base image is needed for
+# plain nvenc (only CUDA *filters* like scale_npp would).
+
+services:
+  app:
+    # Transcodes default to the GPU encoder; callers can still pass `encoder`.
+    environment:
+      FFMPEG_DEFAULT_ENCODER: h264_nvenc
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

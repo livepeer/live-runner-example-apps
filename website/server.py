@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["aiohttp"]
+# ///
 """Tiny backend for the onboarding site.
 
 Serves the static page, exposes /config (public Auth0 SPA settings), and

@@ -48,6 +48,8 @@ async def config(_req: web.Request) -> web.Response:
         "billingUrl": BUILDER_API_URL,
         "gatewayUrl": GATEWAY_URL,
         "mcpUrl": MCP_URL,
+        # hardcoded for now — later serve from the gateway's /v1/models
+        "models": [m for m in os.environ.get("MODELS", "Qwen/Qwen2.5-0.5B-Instruct").split(",") if m],
     })
 
 

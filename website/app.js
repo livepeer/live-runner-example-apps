@@ -71,6 +71,26 @@ client.chat.completions.create(
   $("snip-claude").textContent =
 `claude mcp add --transport http livepeer ${CFG.mcpUrl || "http://localhost:9000/mcp"} \\
   --header "Authorization: Bearer ${key}"`;
+
+  $("snip-sdk").textContent =
+`# Raw Livepeer SDK: list capabilities -> reserve a session -> call the runner.
+# Full script: sdk_example.py (in the repo). It exchanges your key, lists the
+# apps the network advertises, reserves a paid session, and calls the runner.
+uv run --project oauth-gateway --with requests python sdk_example.py --key ${key}`;
+
+  // Available models (hardcoded for now; later from the gateway /v1/models)
+  const models = (CFG.models && CFG.models.length) ? CFG.models : ["Qwen/Qwen2.5-0.5B-Instruct"];
+  $("models-list").textContent = models.join(", ");
+
+  // MCP tools this server exposes (self-described by the MCP server)
+  const tools = [
+    ["ffmpeg_transcode", "transcode a video URL to a target height"],
+    ["ffmpeg_thumbnail", "grab a JPEG thumbnail at a timestamp"],
+    ["ffmpeg_probe", "probe media format / streams / duration"],
+  ];
+  $("mcp-tools").innerHTML = tools.map(function (t) {
+    return "<li><code>" + t[0] + "</code> — " + t[1] + "</li>";
+  }).join("");
 }
 
 boot();

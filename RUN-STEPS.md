@@ -85,13 +85,22 @@ SIGNER_NETWORK=arbitrum-one-mainnet | arbitrum-sepolia   # your wallet's chain
 ETH_RPC_URL=<RPC for that chain>
 ```
 
-**2b. Wallet keystore** — copy YOUR keystore file (wherever it lives in home) into the signer's data dir, and write its password:
-```sh
-mkdir -p remote-signer/data/keystore
-cp /home/ricks/PATH/TO/YOUR/keystore-file remote-signer/data/keystore/    # your actual keystore path
-printf '%s' 'YOUR_KEYSTORE_PASSWORD' > remote-signer/data/.eth-password
+**2b. Wallet keystore (point to your existing folder — no copy).** The signer reads `/data/keystore`. Bind-mount your existing keystore dir there with a compose override, and set the address + password.
+
+Create `docker-compose.override.yml` in BACKEND:
+```yaml
+services:
+  remote-signer:
+    volumes:
+      - /home/ricks/.lpData/arbitrum-one-mainnet/keystore:/data/keystore:ro   # your existing keystore dir
 ```
-Find it if unsure: `find $HOME -name 'UTC--*' -o -name 'key*.json' 2>/dev/null`. (Funding/deposit only matters at Step 5; a valid keystore + password is enough to boot here.)
+Then the password + address:
+```sh
+printf '%s' 'YOUR_KEYSTORE_PASSWORD' > remote-signer/data/.eth-password
+# in .env:  SIGNER_ETH_ADDR=0x<the address you're using>
+#           SIGNER_ETH_KEYSTORE_PATH=/data/keystore
+```
+The folder can hold many keys — the signer picks the one matching `SIGNER_ETH_ADDR`. Find your keystores: `find $HOME -name 'UTC--*' 2>/dev/null`. (Deposit/reserve funding only matters at Step 5; a valid keystore + password + the right address is enough to boot here.)
 
 **2c. Boot + verify:**
 ```sh

@@ -46,6 +46,7 @@ async def config(_req: web.Request) -> web.Response:
         "clientId": SPA_CLIENT_ID,
         "audience": AUDIENCE,
         "billingUrl": BUILDER_API_URL,
+        "appClientId": PUBLIC_CLIENT_ID,   # the app the key belongs to (for the SDK exchange)
         "gatewayUrl": GATEWAY_URL,
         "mcpUrl": MCP_URL,
         # hardcoded for now — later serve from the gateway's /v1/models

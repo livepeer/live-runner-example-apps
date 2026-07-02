@@ -94,12 +94,14 @@ services:
     volumes:
       - /home/ricks/.lpData/arbitrum-one-mainnet/keystore:/data/keystore:ro   # your existing keystore dir
 ```
-Then the password + address:
-```sh
-printf '%s' 'YOUR_KEYSTORE_PASSWORD' > remote-signer/data/.eth-password
-# in .env:  SIGNER_ETH_ADDR=0x<the address you're using>
-#           SIGNER_ETH_KEYSTORE_PATH=/data/keystore
+Then the address + password, both in `.env`:
 ```
+SIGNER_ETH_ADDR=0x<the address you're using>
+SIGNER_ETH_KEYSTORE_PATH=/data/keystore
+SIGNER_ETH_PASSWORD=<that keystore's password>
+```
+> `SIGNER_ETH_PASSWORD` requires the local `remote-signer/entrypoint.sh` patch (env var → `/data/.eth-password`; stock PR #57 is file-only and silently writes an empty password). Report to John. Without the patch: `printf '%s' 'PASSWORD' > remote-signer/data/.eth-password` instead.
+
 The folder can hold many keys — the signer picks the one matching `SIGNER_ETH_ADDR`. Find your keystores: `find $HOME -name 'UTC--*' 2>/dev/null`. (Deposit/reserve funding only matters at Step 5; a valid keystore + password + the right address is enough to boot here.)
 
 **2c. Boot + verify:**

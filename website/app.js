@@ -68,20 +68,9 @@ client.chat.completions.create(
     model="Qwen/Qwen2.5-0.5B-Instruct",
     messages=[{"role": "user", "content": "Hello!"}],
 )`;
-  $("snip-ollama").textContent =
-`# Same key, pick a model
-from openai import OpenAI
-client = OpenAI(base_url="${base}", api_key="${key}")
-client.chat.completions.create(model="qwen2.5:0.5b",
-    messages=[{"role": "user", "content": "Hello!"}])`;
   $("snip-claude").textContent =
-`claude mcp add livepeer-ffmpeg \\
-  --env LIVEPEER_BILLING_URL=${CFG.billingUrl || "http://localhost:8095"} \\
-  --env LIVEPEER_CLIENT_ID=${CFG.clientId} \\
-  --env LIVEPEER_API_KEY=${key} \\
-  --env LIVEPEER_DISCOVERY=https://localhost:8935/discovery \\
-  --env LIVEPEER_SIGNER=http://localhost:8081 \\
-  -- uv run --directory /ABS/PATH/TO/ffmpeg mcp_server.py`;
+`claude mcp add --transport http livepeer ${CFG.mcpUrl || "http://localhost:9000/mcp"} \\
+  --header "Authorization: Bearer ${key}"`;
 }
 
 boot();

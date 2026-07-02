@@ -36,6 +36,7 @@ PUBLIC_CLIENT_ID = os.environ.get("PUBLIC_CLIENT_ID", os.environ.get("DEMO_APP_A
 M2M_ID = os.environ.get("M2M_CLIENT_ID", os.environ.get("DEMO_APP_AUTH0_M2M_CLIENT_ID", ""))
 M2M_SECRET = os.environ.get("M2M_CLIENT_SECRET", os.environ.get("DEMO_APP_AUTH0_M2M_CLIENT_SECRET", ""))
 GATEWAY_URL = os.environ.get("GATEWAY_URL", "http://localhost:8080/v1")
+MCP_URL = os.environ.get("MCP_URL", "http://localhost:9000/mcp")
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -46,6 +47,7 @@ async def config(_req: web.Request) -> web.Response:
         "audience": AUDIENCE,
         "billingUrl": BUILDER_API_URL,
         "gatewayUrl": GATEWAY_URL,
+        "mcpUrl": MCP_URL,
     })
 
 

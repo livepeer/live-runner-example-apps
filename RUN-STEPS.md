@@ -67,10 +67,6 @@ cat .env.livepeer                    # note the DEMO_APP_AUTH0_* ids + secret + 
 ```
 **Pass:** `.env.livepeer` exists and has `DEMO_APP_AUTH0_PUBLIC_CLIENT_ID`, `_M2M_CLIENT_ID`, `_M2M_CLIENT_SECRET`.
 
-**Known snags on a fresh tenant (both fixed / handled):**
-- `409 client_grant_conflict` on the management client → `bootstrap.sh`'s grant-existence check didn't URL-encode the Management-API audience, so it re-created an existing grant. Fixed in the local `bootstrap.sh` (query by `client_id` only, filter audience in `jq`). Report to John for PR #57.
-- `access token lacks scope: update:client_grants` → fixed by the `auth0 login --scopes …` above.
-
 ## Step 2 — Backend config + boot · folder: BACKEND
 
 ```sh

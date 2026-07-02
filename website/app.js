@@ -84,9 +84,14 @@ uv run --project oauth-gateway --with requests python sdk_example.py --key ${key
 
   // MCP tools this server exposes (self-described by the MCP server)
   const tools = [
-    ["ffmpeg_transcode", "transcode a video URL to a target height"],
+    ["ffmpeg_transcode", "transcode a video URL (optional target height)"],
+    ["ffmpeg_clip", "cut a segment [start, end] seconds"],
     ["ffmpeg_thumbnail", "grab a JPEG thumbnail at a timestamp"],
-    ["ffmpeg_probe", "probe media format / streams / duration"],
+    ["ffmpeg_extract_audio", "extract the audio track (m4a)"],
+    ["ffmpeg_gif", "make an animated GIF"],
+    ["ffmpeg_crop", "crop to width x height at (x, y)"],
+    ["ffmpeg_convert", "convert to another container/format"],
+    ["ffmpeg_probe", "probe format / streams / duration"],
   ];
   $("mcp-tools").innerHTML = tools.map(function (t) {
     return "<li><code>" + t[0] + "</code> — " + t[1] + "</li>";

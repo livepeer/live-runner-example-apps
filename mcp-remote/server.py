@@ -99,15 +99,48 @@ async def _run_op(input_url: str, op: str, **params) -> str:
 
 
 @mcp.tool()
-async def ffmpeg_transcode(input_url: str, height: int = 480) -> str:
-    """Transcode a video (by URL) to `height` px, running paid on the Livepeer network."""
-    return await _run_op(input_url, "transcode", height=height)
+async def ffmpeg_transcode(input_url: str, height: int = 0, quality: int = 23) -> str:
+    """Transcode a video (by URL) on Livepeer. height=0 keeps source; lower quality = better."""
+    params: dict = {"quality": quality}
+    if height:
+        params["height"] = height
+    return await _run_op(input_url, "transcode", **params)
+
+
+@mcp.tool()
+async def ffmpeg_clip(input_url: str, start: float, end: float) -> str:
+    """Cut the segment [start, end] seconds from a video URL, paid on Livepeer."""
+    return await _run_op(input_url, "clip", start=start, end=end)
 
 
 @mcp.tool()
 async def ffmpeg_thumbnail(input_url: str, at: float = 0.0) -> str:
     """Grab a JPEG thumbnail at `at` seconds from a video URL, paid on Livepeer."""
     return await _run_op(input_url, "thumbnail", at=at)
+
+
+@mcp.tool()
+async def ffmpeg_extract_audio(input_url: str) -> str:
+    """Extract the audio track (m4a) from a video URL, paid on Livepeer."""
+    return await _run_op(input_url, "extract_audio")
+
+
+@mcp.tool()
+async def ffmpeg_gif(input_url: str, fps: int = 12, height: int = 240) -> str:
+    """Make an animated GIF from a video URL, paid on Livepeer."""
+    return await _run_op(input_url, "gif", fps=fps, height=height)
+
+
+@mcp.tool()
+async def ffmpeg_crop(input_url: str, width: int, height: int, x: int = 0, y: int = 0) -> str:
+    """Crop a video URL to width x height at offset (x, y), paid on Livepeer."""
+    return await _run_op(input_url, "crop", width=width, height=height, x=x, y=y)
+
+
+@mcp.tool()
+async def ffmpeg_convert(input_url: str, format: str = "mp4", quality: int = 23) -> str:
+    """Convert a video URL to another container/format, paid on Livepeer."""
+    return await _run_op(input_url, "convert", format=format, quality=quality)
 
 
 @mcp.tool()

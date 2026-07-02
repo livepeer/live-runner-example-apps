@@ -1,190 +1,178 @@
-# Clearinghouse demo: drop-in OpenAI + MCP on Livepeer, paid + metered per user
+# Clearinghouse demo (Track B): OAuth once, one key, works in OpenAI + Ollama + Claude
 
-A runnable walkthrough. A developer uses an **unmodified OpenAI client** (and an **MCP agent**) with a bearer token; behind the scenes the request is authorized, paid for on Livepeer via a shared **remote signer**, and metered per user in OpenMeter. Zero crypto on the client.
+A developer signs in with OAuth, gets a `$5` trial and **one API key**, and uses Livepeer through **stock clients** with that single key:
 
-This is **Track A** (the fast path): manual bearer tokens, runs on clearinghouse `main`. See [Track B](#track-b--full-oauth--5-trial--cutoff-johns-pr-57) at the bottom for the OAuth + `$5` trial + hard cutoff version.
+- **OpenAI** — `OpenAI(base_url=..., api_key="pmth_...")`
+- **Ollama** — same gateway, pick the model
+- **Claude (MCP)** — `claude mcp add ... --env LIVEPEER_API_KEY=pmth_...`
 
-- Concept docs for walking people through the design: [`docs/hosted-suite/`](docs/hosted-suite/README.md).
-- OpenAI front: [`vllm/gateway_authz.py`](vllm/gateway_authz.py) (this repo).
-- MCP front: [`ffmpeg/mcp_server_authz.py`](ffmpeg/mcp_server_authz.py) (this repo).
+One account, one key, one `$5` balance. Every surface exchanges that key for a short-lived signer session, pays on Livepeer, and meters back to the same account. When the trial is spent, every surface returns `402` with an upgrade link.
 
-## What runs where
+> One key everywhere. The same `pmth_*` string works in all three clients — usage from any of them draws from the same balance. The gateway is "multi-user" only in the sense that one deployed gateway serves everyone's keys; you personally use exactly one key.
 
-| Where | What | Repo |
+## Pieces
+
+| Where | What | Source |
 | --- | --- | --- |
-| clearinghouse stack (Docker) | identity-webhook + remote-signer + Redpanda + collector + OpenMeter | `livepeer/clearinghouse` (`main`) |
-| network (Docker) | orchestrator + vLLM (OpenAI) **or** orchestrator + ffmpeg app (MCP) | this repo |
-| host | `gateway_authz.py` (OpenAI) **or** `mcp_server_authz.py` (MCP) | this repo |
-| host | the developer's OpenAI client / Claude agent | anything |
+| clearinghouse (Docker) | identity-webhook (oidc) + remote-signer + Redpanda + collector + **builder-api** + OpenMeter | clearinghouse **PR #57** (`feat/session-exchange-openmeter-provisioning`) |
+| Auth0 (SaaS) | OAuth login + user provisioning + signer-JWT mint | provisioned by `auth0-provisioner/bootstrap.sh` |
+| OpenMeter / Konnect (SaaS) | customers, `$5` trial grant, balance, 402 gate | your Konnect account |
+| network (Docker) | orchestrator + vLLM / Ollama / ffmpeg runner | this repo |
+| host | OAuth gateway (OpenAI/Ollama) / John's MCP server (Claude) | this repo |
 
-**One swap makes it "clearinghouse":** each example ships its own bundled signer on `:7936`. We **omit** it and point the host front at the **clearinghouse** signer on `:8081` — the one wired to identity + metering.
+The client → exchange → pay flow (identical for all three surfaces):
 
 ```
-openai client ─Bearer sk_live_alice─▶ gateway_authz.py (host :8080)
-                                         │ forwards Bearer ─▶ clearinghouse signer :8081
-                                         │                      └─ identity-webhook resolves sk_ ─▶ auth_id, signs ticket
-                                         ▼                         └─ Kafka ─▶ collector ─▶ OpenMeter (per-user usage)
-                                   orchestrator :8935 ─▶ vLLM  (OpenAI-native inference)
+stock client ─Bearer pmth_KEY─▶ front (OpenAI gateway | Ollama gateway | MCP server)
+                                   │ exchange pmth_KEY at builder-api :8095
+                                   │   └─ OpenMeter: upsert customer, grant $5, read balance
+                                   │        └─ 402 if empty, else mint signer JWT (auth_id)
+                                   ▼
+                             remote-signer :8081 ── signs ticket (auth_id) ─▶ Kafka ─▶ collector ─▶ OpenMeter
+                                   │
+                                   ▼
+                             orchestrator :8935 ─▶ runner (vLLM / Ollama / ffmpeg)
 ```
 
-## Prerequisites
+## What I built vs. what you plug in
 
-- Docker + an **NVIDIA GPU** (vLLM needs one; the ffmpeg MCP demo is CPU-fine).
-- `uv` on the host.
-- A **funded remote-signer wallet** with an on-chain deposit + reserve. Use **testnet** to avoid real funds (set the same `NETWORK` + `ETH_RPC_URL` on both sides below). `ticketEV` is tiny, so mainnet cost per call is negligible, but testnet is safest for a demo.
-- (Only for the usage dashboard) an **OpenMeter / Konnect** API key. The signing + inference path works without it; you just won't see metered usage.
+**Built (in this branch):**
+- `oauth-gateway/gateway.py` — the OpenAI **and** Ollama front. Reads the per-request `pmth_*` key, exchanges it via `SignerTokenProvider` (John's exact pattern + pinned client-lib rev), pays, proxies. Model routing for Ollama via `GATEWAY_MODEL_MAP`.
+- `ffmpeg/` — John's `rs/ffmpeg-mcp-signer` MCP server (the Claude surface), which already does the same exchange.
+- Backend present at `../../ch-worktrees/pr57-builder-api` (clearinghouse PR #57 checked out).
 
-## Part 1 — Clearinghouse (payments + identity + metering)
+**You plug in (credentials Track B requires — I cannot provision these):**
+- An **Auth0 tenant** (for OAuth + signer-JWT mint) and its M2M credentials.
+- An **OpenMeter / Konnect** API key (for customers, the `$5` grant, and the 402 gate).
+- Your **funded signer wallet** (keystore + on-chain deposit/reserve; testnet is fine).
 
-In a checkout of `livepeer/clearinghouse` on `main`:
+Track B does not boot without Auth0 + OpenMeter. Everything up to those is done.
+
+## Setup
+
+### 1. Backend (clearinghouse PR #57)
+
+Use the checked-out worktree: `cd ../../ch-worktrees/pr57-builder-api`.
 
 ```sh
 cp .env.example .env
 ```
 
-Set these in `.env` (manual keys = api_key mode):
+Set `.env` for the exchange path (OIDC mode + builder-api + signer):
 
 ```ini
 WEBHOOK_SECRET=demo-secret-change-me
-IDENTITY_AUTH_MODE=api_key
+# JWT verification for the exchanged Auth0 tokens:
+IDENTITY_AUTH_MODE=oidc
+OIDC_ISSUER=https://YOUR_TENANT.us.auth0.com/
+OIDC_AUDIENCE=livepeer-clearinghouse
+OIDC_CLIENT_CLAIM=app_client_id
+OIDC_SUBJECT_CLAIM=external_user_id
+OIDC_SUBJECT_TYPE=external_user_id
 
-# Manual bearer tokens -> {clientId}:{userId} == auth_id. Add one per person.
-DEMO_API_KEY=sk_live_alice
-DEMO_CLIENT_ID=demo
-DEMO_USER_ID=alice
-DEMO_API_KEYS={"sk_live_bob":{"clientId":"demo","userId":"bob"}}
-
-# Signer authorizes every signing request through the identity webhook.
+# Signer (your funded wallet; testnet to avoid real funds):
 REMOTE_SIGNER_WEBHOOK_URL=http://identity-webhook:8090/authorize
 SIGNER_PORT=8081
-SIGNER_NETWORK=arbitrum-sepolia            # <-- same value in the example .env below
-ETH_RPC_URL=https://sepolia-rollup.arbitrum.io/rpc   # <-- same in both
-SIGNER_ETH_ADDR=0xYOUR_FUNDED_SIGNER_ADDRESS
-SIGNER_ETH_KEYSTORE_PATH=/data/keystore
+SIGNER_NETWORK=arbitrum-sepolia
+ETH_RPC_URL=https://sepolia-rollup.arbitrum.io/rpc
+SIGNER_ETH_ADDR=0xYOUR_FUNDED_SIGNER
 
-# Only needed to SEE metered usage in a dashboard:
+# OpenMeter (trial grant + balance + 402 gate):
 OPENMETER_URL=https://us.api.konghq.com/v3/openmeter
-OPENMETER_API_KEY=            # your Konnect key, or leave blank to skip metering
+OPENMETER_API_KEY=YOUR_KONNECT_KEY
 ```
 
-Drop your funded signer keystore in place:
+Provision Auth0 (creates the M2M apps, the public app client id, and writes `auth0-provisioner/provision/.env.livepeer`), deploy the credentials-exchange Action per `openmeter-collector/builder-api/README.md`, then drop your signer keystore and start:
 
 ```sh
-mkdir -p remote-signer/data/keystore
-cp /path/to/your/signer/keystore/* remote-signer/data/keystore/
-cp /path/to/your/.eth-password       remote-signer/data/.eth-password
+./auth0-provisioner/provision/bootstrap.sh          # needs Auth0 mgmt creds
+mkdir -p remote-signer/data/keystore && cp /path/keystore/* remote-signer/data/keystore/
+cp /path/.eth-password remote-signer/data/.eth-password
+
+docker compose up -d --build     # kafka, identity-webhook, remote-signer, openmeter-collector (+builder-api)
+curl -fsS -X POST http://localhost:8081/sign-orchestrator-info   # signer alive
 ```
 
-Start it and confirm the signer can sign:
+Provision the OpenMeter catalog (defines the `$5` trial plan):
 
 ```sh
-docker compose up -d --build kafka identity-webhook remote-signer openmeter-collector
-curl -fsS -X POST http://localhost:8081/sign-orchestrator-info
-# {"address":"0x…","signature":"0x…"}  -> keystore unlocked, signer live
-
-# sanity-check the api_key -> auth_id resolution:
-docker compose exec identity-webhook curl -sS -X POST http://localhost:8090/authorize \
-  -H "Authorization: Bearer $WEBHOOK_SECRET" -H "Content-Type: application/json" \
-  -d '{"headers":{"Authorization":["Bearer sk_live_alice"]}}'
-# expect: "auth_id":"demo:alice"
+cd openmeter-collector/provision && ./bootstrap.sh catalog
 ```
 
-(Optional, for the dashboard) provision meters + customers so usage attributes:
+### 2. Mint an account (OAuth → one key)
+
+The onboarding step that gives a user their `$5` and their single key. Interactively this is the OAuth login in a portal; headless, hit the builder-api users endpoint (M2M):
 
 ```sh
-cd openmeter-collector/provision
-./bootstrap.sh catalog
-./bootstrap.sh customer demo alice "Alice"
-./bootstrap.sh customer demo bob   "Bob"
+set -a; source openmeter-collector/.env; set +a
+curl -sS -u "$AUTH0_SIGNER_M2M_CLIENT_ID:$AUTH0_SIGNER_M2M_CLIENT_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"externalUserId":"alice","email":"alice@example.com"}' \
+  "http://localhost:8095/api/v1/apps/${DEMO_APP_AUTH0_PUBLIC_CLIENT_ID}/users"
+# -> returns { "apiKey": "pmth_..." }  (shown once). This is Alice's ONE key.
 ```
 
-## Part 2 — OpenAI demo (vLLM)
+Note `DEMO_APP_AUTH0_PUBLIC_CLIENT_ID` — that is the `LIVEPEER_CLIENT_ID` every front uses.
 
-In this repo. Set `vllm/.env` (copy `vllm/.env.example`) with the on-chain **orchestrator** config, matching the clearinghouse network:
+### 3. Runner (this repo)
 
-```ini
-VLLM_MODEL=Qwen/Qwen2.5-0.5B-Instruct
-NETWORK=arbitrum-sepolia                              # <-- same as clearinghouse
-ETH_RPC_URL=https://sepolia-rollup.arbitrum.io/rpc    # <-- same as clearinghouse
-ORCH_KEYSTORE_DIR=/abs/path/to/operator-keystore
-ORCH_ETH_ACCT=0xYourOperator
-ORCH_ETH_PASSWORD=your-operator-pw
-ORCH_ONCHAIN_ADDR=0xYourRegisteredOrchestrator
-PRICE_PER_UNIT=1
-PIXELS_PER_UNIT=1000
-MAX_PRICE_PER_UNIT=0.10USD
-# SIGNER_* here are for the bundled signer we are NOT starting — leave blank.
-```
-
-Bring up the orchestrator + vLLM **without** the bundled signer, then run the host gateway pointed at the clearinghouse signer:
+Bring up one runner at a time (all use `:8935`). vLLM for OpenAI, Ollama for Ollama, ffmpeg for MCP. Omit the bundled signer — the front points at the clearinghouse signer.
 
 ```sh
-cd vllm
-docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d orchestrator vllm
-curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # expect vllm/qwen2.5-0.5b-instruct
-
-uv run gateway_authz.py --signer http://localhost:8081 --discovery https://localhost:8935/discovery &
+cd vllm && docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d orchestrator vllm
 ```
 
-Demo with the stock `openai` library:
+Set `vllm/.env` orchestrator config to the **same** `NETWORK` + `ETH_RPC_URL` as the clearinghouse `.env` (see `vllm/.env.example`).
 
+## Use it — same `pmth_` key in all three
+
+### OpenAI (vLLM)
+
+```sh
+cd oauth-gateway
+export LIVEPEER_BILLING_URL=http://localhost:8095
+export LIVEPEER_CLIENT_ID=$DEMO_APP_AUTH0_PUBLIC_CLIENT_ID
+export GATEWAY_APP=vllm/qwen2.5-0.5b-instruct
+uv run gateway.py &        # OpenAI endpoint on :8080
+```
 ```python
 from openai import OpenAI
-client = OpenAI(base_url="http://localhost:8080/v1", api_key="sk_live_alice")
-print(client.chat.completions.create(
-    model="Qwen/Qwen2.5-0.5B-Instruct",
-    messages=[{"role": "user", "content": "In one sentence, what is Livepeer?"}],
-).choices[0].message.content)
+c = OpenAI(base_url="http://localhost:8080/v1", api_key="pmth_ALICE_KEY")
+print(c.chat.completions.create(model="Qwen/Qwen2.5-0.5B-Instruct",
+      messages=[{"role":"user","content":"Hello!"}]).choices[0].message.content)
 ```
 
-Run it again with `api_key="sk_live_bob"`. In the OpenMeter dashboard, usage lands on **Alice** and **Bob** separately. That is the whole story: drop-in OpenAI, real Livepeer payment, per-user metering.
+### Ollama (same gateway, model routing)
 
-Wrong/blank key → the gateway 401s (no `Authorization` to forward). Stop when done: `kill %1; docker compose down`.
-
-## Part 3 — MCP demo (ffmpeg agentic)
-
-Same payment layer, an agent instead of an OpenAI client. (Run this **after** stopping the vLLM stack — both orchestrators want `:8935`.)
+Bring up the Ollama runner instead of vLLM, then run the same gateway with a model map:
 
 ```sh
-cd ffmpeg
-docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d --build orchestrator app
+export GATEWAY_MODEL_MAP='{"qwen2.5:0.5b":"ollama/qwen2.5-0.5b","llama3.2:1b":"ollama/llama3.2-1b"}'
+uv run gateway.py &
+```
+```python
+c = OpenAI(base_url="http://localhost:8080/v1", api_key="pmth_ALICE_KEY")   # SAME key
+c.chat.completions.create(model="qwen2.5:0.5b", messages=[{"role":"user","content":"hi"}])
 ```
 
-Register the MCP server with Claude Code, pointing the signer at the clearinghouse and passing a key:
+### Claude (MCP)
 
 ```sh
 claude mcp add livepeer-ffmpeg \
   --env LIVEPEER_DISCOVERY=https://localhost:8935/discovery \
   --env LIVEPEER_SIGNER=http://localhost:8081 \
-  --env LIVEPEER_API_KEY=sk_live_bob \
-  -- uv run --directory /ABS/PATH/TO/ffmpeg mcp_server_authz.py
+  --env LIVEPEER_BILLING_URL=http://localhost:8095 \
+  --env LIVEPEER_CLIENT_ID=$DEMO_APP_AUTH0_PUBLIC_CLIENT_ID \
+  --env LIVEPEER_API_KEY=pmth_ALICE_KEY \
+  -- uv run --directory /ABS/PATH/TO/ffmpeg mcp_server.py
 ```
 
-Then ask Claude: *"Clip the first 5 seconds of demo.mp4 and transcode it to 480p with the livepeer ffmpeg tool."* Each tool call is paid via the same signer and metered to **Bob**. This proves the shared payment layer bills an agentic tool call exactly like a chat completion.
+All three exchange the same `pmth_ALICE_KEY` → same `auth_id` → same `$5` balance. Spend it down and every surface starts returning `402` with the upgrade link. That is the whole Track B story: OAuth once, one key, drop-in everywhere, real payment, one metered balance.
 
-## Ports
+## Concept docs for walking people through it
 
-| Port | Service | Where |
-| --- | --- | --- |
-| `8081` | clearinghouse remote-signer | clearinghouse (loopback) |
-| `8090` | identity-webhook | clearinghouse (internal) |
-| `8935` | orchestrator discovery | this repo |
-| `8080` | `gateway_authz.py` OpenAI endpoint | host |
-| `8000` / `5000` | vLLM / ffmpeg runner | this repo (internal) |
+`docs/hosted-suite/` — the architecture and the accounts/billing flow in prose.
 
-## Troubleshooting
+## Fallback: Track A (no OAuth, main only)
 
-- **Signer 401s the gateway:** the `sk_` you sent is not in `DEMO_API_KEY`/`DEMO_API_KEYS`, or `IDENTITY_AUTH_MODE` isn't `api_key`. Re-check with the `/authorize` curl above.
-- **Signer won't start / can't sign:** keystore not in `remote-signer/data/keystore` or `.eth-password` missing; `SIGNER_ETH_ADDR` wrong.
-- **Orchestrator rejects payment:** `NETWORK` / `ETH_RPC_URL` differ between the two `.env` files, or the signer wallet has no on-chain deposit + reserve on that network.
-- **`signer_headers` unsupported:** if the ffmpeg example's pinned `livepeer-gateway` rev predates `signer_headers`, bump it in `ffmpeg/pyproject.toml` to match `vllm/pyproject.toml`.
-- **No usage in the dashboard:** `OPENMETER_API_KEY` blank, or customers not provisioned (`bootstrap.sh customer …`). Signing + inference still work without it.
-
-## Track B — full OAuth + $5 trial + cutoff (John's PR #57)
-
-Track A has no credit gate and no OAuth. The real product exists in John's work:
-
-- **clearinghouse [PR #57](https://github.com/livepeer/clearinghouse/pull/57)** (`feat/session-exchange-openmeter-provisioning`) adds a **builder-api**: Auth0 user provisioning + RFC 8693 token exchange → on first exchange it upserts an OpenMeter customer, starts a subscription, **grants a trial allowance (your `$5`)**, reads the balance, and **mints a signer JWT — or returns HTTP 402 `insufficient_allowance` when credits are gone.**
-- **example-apps branch `rs/ffmpeg-mcp-signer`** has a richer `mcp_server.py` whose client already performs the api_key / Auth0-M2M / OIDC token exchange via a `SignerTokenProvider`.
-
-To graduate to Track B: merge/run PR #57's builder-api with **Auth0 tenant + OpenMeter credentials**, base the MCP front on `rs/ffmpeg-mcp-signer`, and point the OpenAI gateway at the exchange endpoint instead of forwarding the raw `sk_`. The developer then signs in with Google/Auth0, gets `$5` automatically, and is cut off at `402` with an upgrade link — exactly the flow in [`docs/hosted-suite/accounts-and-billing.md`](docs/hosted-suite/accounts-and-billing.md).
+If you want a zero-credential quick version (manual `sk_` keys, no `$5` gate, clearinghouse `main` in `api_key` mode), use `vllm/gateway_authz.py` with `--signer http://localhost:8081`; see the git history of this file for the full Track A runbook.

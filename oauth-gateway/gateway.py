@@ -142,16 +142,25 @@ def main() -> None:
                 )
                 await resp.prepare(request)
                 choice = (data.get("choices") or [{}])[0]
-                content = (choice.get("message") or {}).get("content", "") or ""
+                msg = choice.get("message") or {}
+                content = msg.get("content") or ""
+                tool_calls = msg.get("tool_calls") or []
                 cid = data.get("id", "chatcmpl-stream")
                 model = data.get("model", app_id)
-                for i, word in enumerate(content.split(" ")):
-                    delta = word if i == 0 else " " + word
+                finish = choice.get("finish_reason") or "stop"
+
+                def _emit(delta):
                     chunk = {"id": cid, "object": "chat.completion.chunk", "model": model,
-                             "choices": [{"index": 0, "delta": {"content": delta}, "finish_reason": None}]}
-                    await resp.write(f"data: {json.dumps(chunk)}\n\n".encode())
+                             "choices": [{"index": 0, "delta": delta, "finish_reason": None}]}
+                    return f"data: {json.dumps(chunk)}\n\n".encode()
+
+                for i, word in enumerate(content.split(" ")):
+                    await resp.write(_emit({"content": word if i == 0 else " " + word}))
+                if tool_calls:
+                    # carry the tool call(s) through as an OpenAI streaming delta (with index)
+                    await resp.write(_emit({"tool_calls": [{**tc, "index": i} for i, tc in enumerate(tool_calls)]}))
                 done = {"id": cid, "object": "chat.completion.chunk", "model": model,
-                        "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}
+                        "choices": [{"index": 0, "delta": {}, "finish_reason": finish}]}
                 await resp.write(f"data: {json.dumps(done)}\n\n".encode())
                 await resp.write(b"data: [DONE]\n\n")
                 await resp.write_eof()

@@ -54,6 +54,7 @@ You do NOT create any apps/APIs by hand — `bootstrap.sh` does that in 1b.
 ### 1b. Log in from the CLI + provision
 
 ```sh
+cd /home/ricks/development/livepeer/ch-worktrees/pr57-builder-api/auth0-provisioner/provision
 auth0 login                          # choose: As a user (browser device-code)
 auth0 tenants use YOURTENANT.us.auth0.com
 ./bootstrap.sh

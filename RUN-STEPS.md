@@ -20,23 +20,25 @@ Absolute folders:
 
 ## Step 0 — Prep · folder: anywhere
 
-Install the Auth0 CLI to a dir on your PATH (the bare install script drops the
-binary in the current dir, which is why `auth0` wasn't found):
+Install the Auth0 CLI from the release binary (this is the method that works;
+the bare install script drops the binary in the current dir, so `auth0` isn't
+found on PATH):
 
 ```sh
 mkdir -p ~/.local/bin
-curl -sSfL https://raw.githubusercontent.com/auth0/auth0-cli/main/install.sh | sh -s -- -b ~/.local/bin
+VER=$(curl -s https://api.github.com/repos/auth0/auth0-cli/releases/latest | grep -m1 '"tag_name"' | cut -d'"' -f4)
+curl -sSL "https://github.com/auth0/auth0-cli/releases/download/${VER}/auth0-cli_${VER#v}_Linux_x86_64.tar.gz" | tar xz -C ~/.local/bin auth0
+chmod +x ~/.local/bin/auth0
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 export PATH="$HOME/.local/bin:$PATH"
-auth0 --version              # should print e.g. auth0 vX.Y.Z
-
-# fallback if the script fails — grab the release binary directly:
-#   VER=$(curl -s https://api.github.com/repos/auth0/auth0-cli/releases/latest | jq -r .tag_name)
-#   curl -sSL "https://github.com/auth0/auth0-cli/releases/download/${VER}/auth0-cli_${VER#v}_Linux_x86_64.tar.gz" | tar xz auth0
-#   mv auth0 ~/.local/bin/
+auth0 --version              # e.g. auth0 version 1.32.0
 
 jq --version                 # sudo apt install -y jq  if missing
 ```
+
+> IMPORTANT: `export PATH="$HOME/.local/bin:$PATH"` must be run in the SAME
+> terminal you continue in (or open a new one after the `.bashrc` line above),
+> or `auth0` / `bootstrap.sh` will report "auth0 CLI required".
 Have ready: John's `.env` saved to a file; a **chain** choice (Arbitrum Sepolia testnet recommended — no real funds).
 **Pass:** `auth0 --version` and `jq --version` both print.
 

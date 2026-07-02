@@ -105,6 +105,7 @@ SIGNER_ETH_PASSWORD=<that keystore's password>
 The folder can hold many keys — the signer picks the one matching `SIGNER_ETH_ADDR`. Find your keystores: `find $HOME -name 'UTC--*' 2>/dev/null`. (Deposit/reserve funding only matters at Step 5; a valid keystore + password + the right address is enough to boot here.)
 
 **2c. Boot + verify:**
+
 ```sh
 docker compose up -d --build
 curl -fsS -X POST http://localhost:8081/sign-orchestrator-info
@@ -112,6 +113,8 @@ curl -fsS http://localhost:8095/api/v1/docs >/dev/null && echo "builder-api up"
 ( cd openmeter-collector/provision && ./bootstrap.sh catalog )
 ```
 **Pass:** signer returns `{"address":…,"signature":…}` and `builder-api up` prints.
+
+> Gotcha: the kafka/signer entrypoints `source /service/.env` with POSIX `sh`, so any value containing shell-special chars (`< > ( ) & | ; space` …) breaks the WHOLE stack with `cannot open <fragment>` and Kafka goes unhealthy. Quote such values: `SIGNER_ETH_PASSWORD='p@ss<word'`. Most-likely offender is the keystore password. (Report to John: entrypoints should quote or use a tolerant parser.)
 
 ## Step 3 — Mint an account · folder: BACKEND
 

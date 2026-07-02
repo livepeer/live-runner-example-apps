@@ -28,22 +28,31 @@ $("logout").onclick = () => auth0Client.logout({ logoutParams: { returnTo: windo
 
 async function onSignedIn() {
   const user = await auth0Client.getUser();
-  const token = await auth0Client.getTokenSilently();
   $("signed-out").classList.add("hidden");
   $("signed-in").classList.remove("hidden");
   $("who").textContent = user.email || user.sub;
 
   // Provision + mint the durable key on the backend (M2M secret stays server-side).
-  const res = await fetch("/api/provision", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-    body: JSON.stringify({ externalUserId: user.sub, email: user.email }),
-  });
-  const data = await res.json();
+  // No token needed — the backend mints via M2M; getTokenSilently would require an
+  // API grant the SPA app may not have, and its failure must not block the mint.
+  let data = {};
+  try {
+    const res = await fetch("/api/provision", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ externalUserId: user.sub, email: user.email }),
+    });
+    data = await res.json();
+  } catch (e) {
+    data = { error: String(e) };
+  }
+  $("key-card").classList.remove("hidden");
   if (data.apiKey) {
-    $("key-card").classList.remove("hidden");
     $("apikey").textContent = data.apiKey;
     renderSnippets(data.apiKey);
+  } else {
+    // key is returned once at signup; a repeat login for the same account has none
+    $("apikey").textContent = "(key already issued for this account — it is shown once at signup)";
   }
   $("bal").textContent = data.balance != null ? `$${data.balance}` : "$5.00";
 }

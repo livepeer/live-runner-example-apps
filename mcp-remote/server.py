@@ -27,6 +27,7 @@ import os
 import requests
 import uvicorn
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from livepeer_gateway.live_runner import call_runner, stop_runner_session
@@ -118,6 +119,11 @@ async def ffmpeg_probe(input_url: str) -> str:
 def main() -> None:
     mcp.settings.host = "127.0.0.1"
     mcp.settings.port = PORT
+    # Behind a tunnel the Host header isn't localhost, which trips the SDK's
+    # DNS-rebinding protection (421). Auth here is the bearer token, not browser
+    # cookies, so it's safe to relax it for tunnel/public use.
+    if os.environ.get("MCP_ALLOW_TUNNEL", "").lower() in ("1", "true", "yes"):
+        mcp.settings.transport_security = TransportSecuritySettings(enable_dns_rebinding_protection=False)
     app = mcp.streamable_http_app()          # Starlette app, MCP mounted at /mcp
     app.add_middleware(BearerMiddleware)
     print(f"remote MCP (streamable-http) on http://127.0.0.1:{PORT}/mcp  billing={BILLING} client_id={CLIENT_ID}")

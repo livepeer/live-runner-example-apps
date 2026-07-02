@@ -82,31 +82,24 @@ client.chat.completions.create(
   --header "Authorization: Bearer ${key}"`;
 
   $("snip-sdk").textContent =
-`import asyncio
+`# PREVIEW — not for production. Where the raw SDK is headed: point it at a
+# hosted signer URL + your token (same URL+token idea as OpenAI/MCP above).
+import asyncio
 from livepeer_gateway.selection import reserve_session
 from livepeer_gateway.live_runner import call_runner, stop_runner_session
-from livepeer_gateway_client.signer_provider import SignerTokenProvider
 
 async def main():
-    # 1. exchange your key for a signer session (grants $5 / gates at 402)
-    p = SignerTokenProvider(billing_url="${CFG.billingUrl || "http://localhost:8095"}",
-                            api_key="${key}",
-                            client_id="${CFG.appClientId || ""}")
-    p.refresh()
+    signer = "https://signer.livepeer.network/"        # hosted signer (coming)
+    auth = {"Authorization": "Bearer ${key}"}          # your token
 
-    # 2. reserve a paid session on an app, 3. call the runner directly
-    session = await reserve_session(discovery_url=p.discovery_url,
+    session = await reserve_session(discovery_url="https://discovery.livepeer.network/",
                                     app="vllm/qwen2.5-0.5b-instruct",
-                                    signer_url=p.signer_url, signer_headers=p.headers)
-    try:
-        result = await call_runner(
-            runner_url=session.app_url.rstrip("/") + "/v1/chat/completions",
-            payload={"model": "Qwen/Qwen2.5-0.5B-Instruct",
-                     "messages": [{"role": "user", "content": "Hello!"}]},
-            signer_url=p.signer_url, signer_headers=p.headers)
-        print(result.data["choices"][0]["message"]["content"])
-    finally:
-        await stop_runner_session(session)
+                                    signer_url=signer, signer_headers=auth)
+    r = await call_runner(runner_url=session.app_url.rstrip("/") + "/v1/chat/completions",
+        payload={"model": "Qwen/Qwen2.5-0.5B-Instruct",
+                 "messages": [{"role": "user", "content": "Hello!"}]},
+        signer_url=signer, signer_headers=auth)
+    print(r.data["choices"][0]["message"]["content"])
 
 asyncio.run(main())`;
 

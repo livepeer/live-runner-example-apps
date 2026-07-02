@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+"""echo app: a realtime trickle-video live-runner, made callable on the Livepeer network.
+
+Livepeer integration (grep `# Livepeer:`):
+  1. register_runner()          — announce the app to the orchestrator (startup)
+  2. create_trickle_channels()  — open the session's in/out media channels
+  3. MediaPublish(out)          — sink for the transformed frames sent back to the client
+  4. MediaOutput(in)            — read the client's frames, transform, write to the publisher
+  5. registration.close()       — deregister (cleanup)
+
+The handler returns the channels' public `url`s so the client streams media through them.
+"""
 from __future__ import annotations
 
 import argparse
@@ -140,7 +151,7 @@ async def _handle_echo(request: web.Request) -> web.Response:
 
     # Pass the request so the SDK opens channels using the orchestrator's
     # Session-Control header, whose URLs are reachable from the runner's network.
-    channels = await request.app["registration"].create_trickle_channels(
+    channels = await request.app["registration"].create_trickle_channels(  # Livepeer: 2
         request,
         [
             {"name": "in", "mime_type": "video/mp2t"},
@@ -154,14 +165,14 @@ async def _handle_echo(request: web.Request) -> web.Response:
     # for production apps, handle errors
     mode = _parse_mode(json.loads(await request.read()))
     # internal_url is the runner-reachable channel address (== public url on a shared network).
-    publisher = MediaPublish(by_name["out"]["internal_url"])
+    publisher = MediaPublish(by_name["out"]["internal_url"])  # Livepeer: 3
 
     async def _on_frame(decoded) -> None:
         frame = _transform_frame(decoded, mode)
         if frame is not None:
             await publisher.write_frame(frame)
 
-    output = MediaOutput(by_name["in"]["internal_url"], on_frame=_on_frame)
+    output = MediaOutput(by_name["in"]["internal_url"], on_frame=_on_frame)  # Livepeer: 4
 
     # Hand public channel urls to the client, so it can send/receive media.
     state = EchoSession(
@@ -197,7 +208,7 @@ def main() -> None:
     args = _parse_args()
 
     async def _on_startup(app: web.Application) -> None:
-        app["registration"] = await register_runner(
+        app["registration"] = await register_runner(  # Livepeer: 1
             args.orchestrator,
             secret=args.orchSecret,
             runner_url=args.runner_url,
@@ -213,7 +224,7 @@ def main() -> None:
     async def _on_cleanup(app: web.Application) -> None:
         await _close_pipeline()
         with suppress(Exception):
-            await app["registration"].close()
+            await app["registration"].close()  # Livepeer: 5
 
     app = web.Application()
     app.router.add_post("/echo", _handle_echo)

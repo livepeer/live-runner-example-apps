@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+"""echo client: reserve a session, stream video through the runner, settle up.
+
+Livepeer integration (grep `# Livepeer:`):
+  1. reserve_session()     — discover orchestrators advertising the app, reserve one
+  2. post_json(/echo)      — start the runner session; returns the in/out channel urls
+  3. MediaPublish(in)      — publish the input video to the runner
+  4. MediaOutput(out)      — receive the echoed output stream
+  5. stop_runner_session() — end the session (settles payment on-chain)
+"""
 from __future__ import annotations
 
 import argparse
@@ -62,7 +71,7 @@ async def _publish_video(
     try:
         if not input_.streams.video:
             raise LivepeerGatewayError(f"No video stream found in input: {input_source}")
-        publisher = MediaPublish(publish_url)
+        publisher = MediaPublish(publish_url)  # Livepeer: 3
         prev_pts_time: float | None = None
         prev_wall: float | None = None
         next_update_pts_time: float | None = None
@@ -129,10 +138,10 @@ async def main() -> None:
     session = None
 
     try:
-        session = await reserve_session(discovery_url=args.discovery, app=APP_ID)
+        session = await reserve_session(discovery_url=args.discovery, app=APP_ID)  # Livepeer: 1
         log.info("session_id=%s app_url=%s", session.session_id, session.app_url)
 
-        echo = await post_json(f"{session.app_url.rstrip('/')}/echo", {"radius": args.radius, "mode": args.mode})
+        echo = await post_json(f"{session.app_url.rstrip('/')}/echo", {"radius": args.radius, "mode": args.mode})  # Livepeer: 2
         in_url = _channel_url(echo, "in")
         out_url = _channel_url(echo, "out")
         log.info("in=%s out=%s", in_url, out_url)
@@ -143,7 +152,7 @@ async def main() -> None:
                 if output_stdout:
                     fh.flush()
 
-            async with MediaOutput(out_url, on_bytes=_write_chunk):
+            async with MediaOutput(out_url, on_bytes=_write_chunk):  # Livepeer: 4
                 await _publish_video(
                     input_source,
                     in_url,
@@ -159,7 +168,7 @@ async def main() -> None:
     finally:
         if session is not None:
             with suppress(Exception):
-                await stop_runner_session(session)
+                await stop_runner_session(session)  # Livepeer: 5
 
 
 if __name__ == "__main__":

@@ -70,18 +70,31 @@ cat .env.livepeer                    # note the DEMO_APP_AUTH0_* ids + secret + 
 ## Step 2 — Backend config + boot · folder: BACKEND
 
 ```sh
-cp /path/to/johns.env .env
-# edit .env:
-#   OIDC_ISSUER=https://YOURTENANT.us.auth0.com/      (from .env.livepeer AUTH0_ISSUER)
-#   DEMO_APP_AUTH0_PUBLIC_CLIENT_ID / _M2M_CLIENT_ID / _M2M_CLIENT_SECRET = your values
-#   OIDC_AUDIENCE=livepeer-clearinghouse              (unchanged)
-#   OPENMETER_URL / OPENMETER_API_KEY                 = John's (unchanged)
-#   SIGNER_ETH_ADDR=0xYOURADDR ; SIGNER_NETWORK + ETH_RPC_URL = your chain
+cd /home/ricks/development/livepeer/ch-worktrees/pr57-builder-api
+```
 
+**2a. `.env`** — your `.env` mixes 3 sources: **your Auth0** (from `.env.livepeer`), **John's OpenMeter** (unchanged), **your wallet**. Start from John's env as `.env`, then set:
+```
+IDENTITY_AUTH_MODE=oidc
+OIDC_ISSUER=https://YOURTENANT.eu.auth0.com/            # = AUTH0_ISSUER in auth0-provisioner/provision/.env.livepeer
+OIDC_AUDIENCE=livepeer-clearinghouse                     # unchanged
+DEMO_CLIENT_ID / DEMO_APP_AUTH0_PUBLIC_CLIENT_ID / _M2M_CLIENT_ID / _M2M_CLIENT_SECRET   # = your .env.livepeer values
+OPENMETER_URL / OPENMETER_API_KEY                        # John's — unchanged
+SIGNER_ETH_ADDR=0xYOURADDR                               # your signer wallet
+SIGNER_NETWORK=arbitrum-one-mainnet | arbitrum-sepolia   # your wallet's chain
+ETH_RPC_URL=<RPC for that chain>
+```
+
+**2b. Wallet keystore** — copy YOUR keystore file (wherever it lives in home) into the signer's data dir, and write its password:
+```sh
 mkdir -p remote-signer/data/keystore
-cp /path/keystore-file remote-signer/data/keystore/
-printf '%s' 'KEYSTORE_PASSWORD' > remote-signer/data/.eth-password
+cp /home/ricks/PATH/TO/YOUR/keystore-file remote-signer/data/keystore/    # your actual keystore path
+printf '%s' 'YOUR_KEYSTORE_PASSWORD' > remote-signer/data/.eth-password
+```
+Find it if unsure: `find $HOME -name 'UTC--*' -o -name 'key*.json' 2>/dev/null`. (Funding/deposit only matters at Step 5; a valid keystore + password is enough to boot here.)
 
+**2c. Boot + verify:**
+```sh
 docker compose up -d --build
 curl -fsS -X POST http://localhost:8081/sign-orchestrator-info
 curl -fsS http://localhost:8095/api/v1/docs >/dev/null && echo "builder-api up"

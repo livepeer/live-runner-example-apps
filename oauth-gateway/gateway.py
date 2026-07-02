@@ -129,19 +129,33 @@ def main() -> None:
             runner_url = session.app_url.rstrip("/") + runner_path
 
             if payload.get("stream"):
-                async with await call_runner(
-                    runner_url=runner_url, payload=payload,
-                    signer_url=signer_url, signer_headers=signer_headers, stream=True,
-                ) as stream:
-                    resp = web.StreamResponse(
-                        status=stream.status,
-                        headers={"Content-Type": stream.content_type or "text/event-stream"},
-                    )
-                    await resp.prepare(request)
-                    async for chunk in stream.aiter_bytes():
-                        await resp.write(chunk)
-                    await resp.write_eof()
-                    return resp
+                # The pinned SDK rev can't stream the runner response, so call once
+                # (stream disabled to the runner) and re-emit as OpenAI SSE chunks.
+                result = await call_runner(
+                    runner_url=runner_url, payload={**payload, "stream": False},
+                    signer_url=signer_url, signer_headers=signer_headers,
+                )
+                data = result.data
+                resp = web.StreamResponse(
+                    status=200,
+                    headers={"Content-Type": "text/event-stream", "Cache-Control": "no-cache"},
+                )
+                await resp.prepare(request)
+                choice = (data.get("choices") or [{}])[0]
+                content = (choice.get("message") or {}).get("content", "") or ""
+                cid = data.get("id", "chatcmpl-stream")
+                model = data.get("model", app_id)
+                for i, word in enumerate(content.split(" ")):
+                    delta = word if i == 0 else " " + word
+                    chunk = {"id": cid, "object": "chat.completion.chunk", "model": model,
+                             "choices": [{"index": 0, "delta": {"content": delta}, "finish_reason": None}]}
+                    await resp.write(f"data: {json.dumps(chunk)}\n\n".encode())
+                done = {"id": cid, "object": "chat.completion.chunk", "model": model,
+                        "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}
+                await resp.write(f"data: {json.dumps(done)}\n\n".encode())
+                await resp.write(b"data: [DONE]\n\n")
+                await resp.write_eof()
+                return resp
 
             result = await call_runner(
                 runner_url=runner_url, payload=payload,

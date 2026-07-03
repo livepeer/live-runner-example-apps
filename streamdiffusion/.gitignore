@@ -1,0 +1,5 @@
+# Model weights, HF cache, and compiled TensorRT engines (large, GPU-specific).
+models/
+# Output written by client.py (MPEG-TS stream, not TypeScript).
+streamdiffusion-out.ts
+__pycache__/

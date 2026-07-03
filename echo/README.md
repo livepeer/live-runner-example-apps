@@ -1,6 +1,6 @@
 # Echo app (trickle realtime video)
 
-A realtime video app on the Livepeer network: it receives a live video stream over **trickle** channels, optionally transforms each frame (gray / invert / blur), and echoes it back. This is the **live/stateful** path — continuous media over trickle, not request/response — so the app embeds the SDK and self-registers (dynamic).
+A realtime video app on the Livepeer network: it receives a live video stream over **trickle** channels, optionally transforms each frame (gray / invert / blur) or the audio (robot voice), and echoes it back. This is the **live/stateful** path — continuous media over trickle, not request/response — so the app embeds the SDK and self-registers (dynamic).
 
 |              |                                      |
 | ------------ | ------------------------------------ |
@@ -59,8 +59,21 @@ Swap `/dev/video0` for your node. If that size/format isn't supported, list the 
 
 The `ffplay` low-delay flags (`-fflags nobuffer -flags low_delay -framedrop`) keep the preview close to realtime; drop them and it buffers.
 
+**With audio (robot voice)** — add a mic source and the audio round-trips too. `--mode robot` ring-modulates it into a robot voice while the video passes through; any other mode echoes the audio unchanged:
+
+```sh
+ffmpeg -f v4l2 -input_format mjpeg -framerate 30 -video_size 1280x720 -i /dev/video0 \
+  -f alsa -i default \
+  -c:v libx264 -tune zerolatency -preset ultrafast -pix_fmt yuv420p -c:a aac -ar 48000 -ac 1 \
+  -f mpegts - \
+  | uv run client.py - --mode robot --discovery https://localhost:8935/discovery --output - \
+  | ffplay -fflags nobuffer -flags low_delay -framedrop -i -
+```
+
+`-f alsa -i default` is the Linux mic; macOS pairs video+audio in one input (`-f avfoundation -i 0:0`), Windows adds `-f dshow -i audio="<name>"`. Without a mic source the pipe is video-only and behaves exactly as above.
+
 Stop the stack with `docker compose down`.
 
-- `--mode` picks the transform: `echo` (passthrough, the default), `gray`, `invert`, or `blur`. Use `--mode blur` on any command above to see the echo visibly transform the stream.
-- `blur` sweeps the radius `0 -> max -> 0` live (driving `/update`); `--blur-period N` sets the seconds per sweep cycle (default 2; larger is slower). `gray`/`invert` are static.
+- `--mode` picks the transform: `echo` (passthrough, the default), `gray`, `invert`, `blur`, or `robot`. Use `--mode blur` on any command above to see the echo visibly transform the stream.
+- `blur` sweeps the radius `0 -> max -> 0` live (driving `/update`); `--blur-period N` sets the seconds per sweep cycle (default 2; larger is slower). `gray`/`invert` are static. `robot` ring-modulates the audio track (video passes through).
 - `--radius N` sets the initial blur strength, `--max-frames N` stops early.

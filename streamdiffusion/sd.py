@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Optional
 
 import numpy as np
-import torch
 from PIL import Image
 
 ENGINE_DIR = os.environ.get("SD_ENGINE_DIR", "/models/engines")
@@ -70,6 +69,7 @@ class StreamDiffusion:
             output_type="pt",
             use_denoising_batch=True,
             cfg_type="self",
+            do_add_noise=False,          # ai-runner: skip per-step noise -> less frame flicker
             seed=seed,
             engine_dir=ENGINE_DIR,
             build_engines_if_missing=build_engines,
@@ -94,6 +94,15 @@ class StreamDiffusion:
         if self.wrapper is None:
             raise RuntimeError("pipeline not loaded")
         img = self.wrapper.preprocess_image(Image.fromarray(rgb))
+        # preprocess_image outputs [-1,1], but the pipeline expects [0,1] (the
+        # deprecation warning in the logs). Rescale so the model gets correctly-ranged
+        # input -> noticeably better output. (Matches ai-runner's denormalize step.)
+        img = ((img + 1.0) / 2.0).clamp(0.0, 1.0)
+        # Prime the stateful streaming pipeline once so the first frames aren't cold.
+        if not getattr(self, "_primed", False):
+            self._primed = True
+            for _ in range(int(getattr(self.wrapper, "batch_size", 1) or 1)):
+                self.wrapper(image=img)
         out = self.wrapper(image=img)              # output_type="pt" -> tensor [0,1]
         if isinstance(out, list):
             out = out[0]

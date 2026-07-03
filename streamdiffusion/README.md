@@ -6,6 +6,8 @@ per-frame transform swapped for StreamDiffusion img2img: it receives a live vide
 stream over trickle, diffuses each frame against a text prompt, and streams the
 result back. Re-prompt live over the control path.
 
+For the opposite approach to the same model, see [`streamdiffusion-ws`](../streamdiffusion-ws): daydream's StreamDiffusion server run **unmodified** behind the runner (reverse-proxied WebSocket), with no `runner.py`/`sd.py` to maintain. This example instead **embeds** the SDK and owns the trickle media loop.
+
 Like [`vllm`](../vllm), it's attached as a **static runner** — best for a fixed,
 long-running GPU deployment: the orchestrator is configured with the app's URL in
 `runners.json` and health-polls `/health`, so there's no SDK registrar or
@@ -34,7 +36,6 @@ does **not** depend on the (deprecated) `ai-runner` image or its internal
 | `runner.py` | the app: warm-up build, `/health` + `/status`, creates trickle `in`/`out`, runs `sd.process` per frame |
 | `runners.json` | static config the orchestrator loads (`-liveRunnerConfig`) |
 | `client.py` | publishes a file or webcam, reads the diffused output, re-prompts live |
-| `view.sh` | live showcase: webcam → StreamDiffusion → an ffplay window (low-latency) |
 | `Dockerfile` | CUDA 12.8 / torch 2.7.1 / streamdiffusion + tensorrt + the SDK |
 | `build_engines.sh` | builds the image and compiles TensorRT engines into `./models` |
 | `docker-compose.yml` | offchain orchestrator (`-liveRunnerConfig`) + this GPU app |

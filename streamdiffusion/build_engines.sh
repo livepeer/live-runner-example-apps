@@ -37,8 +37,10 @@ docker run --rm --name sd-engines-prepare --gpus "$GPUS" \
   "$IMAGE" \
   python sd.py --build --model "$MODEL" --width "$WIDTH" --height "$HEIGHT"
 
-# Files written as root inside the container; hand them back.
-docker run --rm -v "$MODELS_DIR:/models" "$IMAGE" chown -R "$(id -u):$(id -g)" /models
+# Files written as root inside the container; hand them back. Use a plain image,
+# not the CUDA-based "$IMAGE", so the NVIDIA entrypoint doesn't print a spurious
+# "Driver was not detected" warning when this runs without --gpus.
+docker run --rm -v "$MODELS_DIR:/models" alpine chown -R "$(id -u):$(id -g)" /models
 
 echo ">> Done. Engines under: $MODELS_DIR/engines"
 echo ">> 'docker compose up -d' now starts the orchestrator + this app with these engines mounted."

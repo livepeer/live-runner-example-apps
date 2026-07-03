@@ -1,0 +1,31 @@
+# End-to-end offchain demo: orchestrator + tiles app (capacity fan-out).
+#
+# The orchestrator service is defined once in ../compose.orchestrator.yml and
+# pulled in with `extends`; this file only adds the app. CAPACITY (default 4)
+# sets the runner's advertised capacity — the knob this example showcases:
+#   CAPACITY=1 docker compose up -d --build   # tiles serialize
+#   uv run client.py photo.jpg --discovery https://localhost:8935/discovery
+#   docker compose down
+#   CAPACITY=9 docker compose up -d --build   # tiles run in parallel (same output, faster)
+
+services:
+  orchestrator:
+    extends:
+      file: ../compose.orchestrator.yml
+      service: orchestrator
+
+  app:
+    build: .
+    container_name: example_apps_tiles
+    # Wait for the orchestrator's healthcheck so registration doesn't race its boot.
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    command:
+      - python
+      - runner.py
+      - --host=0.0.0.0
+      - --orchestrator=https://orchestrator:8935
+      - --orchSecret=abcdef
+      - --runner-url=http://app:8989
+      - --capacity=${CAPACITY:-4}

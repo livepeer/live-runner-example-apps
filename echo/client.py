@@ -14,7 +14,12 @@ import av
 from livepeer_gateway.errors import LivepeerGatewayError
 from livepeer_gateway.live_runner import stop_runner_session
 from livepeer_gateway.media_output import MediaOutput
-from livepeer_gateway.media_publish import MediaPublish
+from livepeer_gateway.media_publish import (
+    AudioOutputConfig,
+    MediaPublish,
+    MediaPublishConfig,
+    VideoOutputConfig,
+)
 from livepeer_gateway.http import post_json
 from livepeer_gateway.selection import reserve_session
 
@@ -22,20 +27,44 @@ DEFAULT_DISCOVERY = "http://localhost:8935/discovery"
 APP_ID = "livepeer-sample/echo"
 DEFAULT_OUTPUT = "echo-out.ts"
 MAX_BLUR_RADIUS = 100
-MODES = ("echo", "gray", "invert", "blur")
+MODES = ("echo", "gray", "invert", "blur", "robot")
 
 log = logging.getLogger("echo-client")
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run the proxied echo Live Runner demo.")
-    parser.add_argument("input", help="input video file, or - to read an MPEG-TS stream from stdin (e.g. piped from ffmpeg)")
+    parser = argparse.ArgumentParser(
+        description="Run the proxied echo Live Runner demo."
+    )
+    parser.add_argument(
+        "input",
+        help="input video file, or - to read an MPEG-TS stream from stdin (e.g. piped from ffmpeg)",
+    )
     parser.add_argument("--discovery", default=DEFAULT_DISCOVERY)
-    parser.add_argument("--output", default=DEFAULT_OUTPUT, help="output file for the echoed stream, or - for stdout (e.g. piped to ffplay)")
+    parser.add_argument(
+        "--output",
+        default=DEFAULT_OUTPUT,
+        help="output file for the echoed stream, or - for stdout (e.g. piped to ffplay)",
+    )
     parser.add_argument("--radius", type=int, default=75)
-    parser.add_argument("--max-frames", type=int, default=0, help="Stop after this many input video frames (0 = full file).")
-    parser.add_argument("--mode", choices=MODES, default="echo", help="Transform the runner applies: echo (passthrough), gray, invert, or blur. blur sweeps the radius; the rest are static.")
-    parser.add_argument("--blur-period", type=float, default=2.0, help="Seconds per blur sweep cycle (0->max->0); only used with --mode blur.")
+    parser.add_argument(
+        "--max-frames",
+        type=int,
+        default=0,
+        help="Stop after this many input video frames (0 = full file).",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=MODES,
+        default="echo",
+        help="Transform the runner applies: echo (passthrough), gray, invert, blur, or robot (ring-mod audio). blur sweeps the radius; the rest are static.",
+    )
+    parser.add_argument(
+        "--blur-period",
+        type=float,
+        default=2.0,
+        help="Seconds per blur sweep cycle (0->max->0); only used with --mode blur.",
+    )
     return parser.parse_args()
 
 
@@ -61,8 +90,18 @@ async def _publish_video(
     input_ = av.open("pipe:0", format="mpegts") if live else av.open(input_source)
     try:
         if not input_.streams.video:
-            raise LivepeerGatewayError(f"No video stream found in input: {input_source}")
-        publisher = MediaPublish(publish_url)
+            raise LivepeerGatewayError(
+                f"No video stream found in input: {input_source}"
+            )
+        # Publish video plus an audio track: if the input carries audio (e.g. ffmpeg with
+        # a mic source) it round-trips through the runner; a video-only input leaves the
+        # audio track empty. write_frame() routes each frame to its track by type.
+        publisher = MediaPublish(
+            publish_url,
+            config=MediaPublishConfig(
+                tracks=[VideoOutputConfig(), AudioOutputConfig()]
+            ),
+        )
         prev_pts_time: float | None = None
         prev_wall: float | None = None
         next_update_pts_time: float | None = None
@@ -71,40 +110,59 @@ async def _publish_video(
         # blur sweeps 0->max->0 (2*MAX steps); spread one full cycle over blur_period.
         update_interval = blur_period / (2 * MAX_BLUR_RADIUS)
 
+        video_index = 0
         try:
-            for index, frame in enumerate(input_.decode(video=0), start=1):
-                if max_frames > 0 and index > max_frames:
-                    break
-                current_pts_time = None
-                if frame.pts is not None and frame.time_base is not None:
-                    current_pts_time = float(frame.pts * frame.time_base)
-                    if next_update_pts_time is None:
-                        next_update_pts_time = current_pts_time
-
-                while (
-                    mode == "blur"
-                    and app_url
-                    and current_pts_time is not None
-                    and next_update_pts_time is not None
-                    and current_pts_time >= next_update_pts_time
-                ):
-                    await post_json(f"{app_url.rstrip('/')}/update", {"mode": "blur", "radius": blur_radius})
-                    if blur_radius == MAX_BLUR_RADIUS:
-                        blur_direction = -1
-                    elif blur_radius == 0:
-                        blur_direction = 1
-                    blur_radius += blur_direction
-                    next_update_pts_time += update_interval
-
-                # Pace files to realtime (live self-paces, so sleep_s=0). sleep(0) still
-                # yields, so async POSTs/reads aren't starved by the blocking decode.
+            # decode() (not decode(video=0)) yields both video and audio frames when the
+            # input has audio; pacing and the blur schedule are driven off video frames
+            # only, while every frame is published (write_frame routes by type).
+            for frame in input_.decode():
+                is_video = isinstance(frame, av.VideoFrame)
                 sleep_s = 0.0
-                if not live and prev_pts_time is not None and prev_wall is not None and current_pts_time is not None:
-                    sleep_s = max(0.0, (current_pts_time - prev_pts_time) - (time.monotonic() - prev_wall))
+                if is_video:
+                    video_index += 1
+                    if max_frames > 0 and video_index > max_frames:
+                        break
+                    current_pts_time = None
+                    if frame.pts is not None and frame.time_base is not None:
+                        current_pts_time = float(frame.pts * frame.time_base)
+                        if next_update_pts_time is None:
+                            next_update_pts_time = current_pts_time
 
-                if current_pts_time is not None:
-                    prev_pts_time = current_pts_time
-                    prev_wall = time.monotonic()
+                    while (
+                        mode == "blur"
+                        and app_url
+                        and current_pts_time is not None
+                        and next_update_pts_time is not None
+                        and current_pts_time >= next_update_pts_time
+                    ):
+                        await post_json(
+                            f"{app_url.rstrip('/')}/update",
+                            {"mode": "blur", "radius": blur_radius},
+                        )
+                        if blur_radius == MAX_BLUR_RADIUS:
+                            blur_direction = -1
+                        elif blur_radius == 0:
+                            blur_direction = 1
+                        blur_radius += blur_direction
+                        next_update_pts_time += update_interval
+
+                    # Pace files to realtime (live self-paces, so sleep_s=0). sleep(0) still
+                    # yields, so async POSTs/reads aren't starved by the blocking decode.
+                    if (
+                        not live
+                        and prev_pts_time is not None
+                        and prev_wall is not None
+                        and current_pts_time is not None
+                    ):
+                        sleep_s = max(
+                            0.0,
+                            (current_pts_time - prev_pts_time)
+                            - (time.monotonic() - prev_wall),
+                        )
+
+                    if current_pts_time is not None:
+                        prev_pts_time = current_pts_time
+                        prev_wall = time.monotonic()
 
                 await publisher.write_frame(frame)
                 await asyncio.sleep(sleep_s)
@@ -115,7 +173,9 @@ async def _publish_video(
 
 
 async def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+    )
     args = _parse_args()
     output_stdout = args.output.strip() == "-"
     output_path = None if output_stdout else Path(args.output).expanduser()
@@ -132,12 +192,18 @@ async def main() -> None:
         session = await reserve_session(discovery_url=args.discovery, app=APP_ID)
         log.info("session_id=%s app_url=%s", session.session_id, session.app_url)
 
-        echo = await post_json(f"{session.app_url.rstrip('/')}/echo", {"radius": args.radius, "mode": args.mode})
+        echo = await post_json(
+            f"{session.app_url.rstrip('/')}/echo",
+            {"radius": args.radius, "mode": args.mode},
+        )
         in_url = _channel_url(echo, "in")
         out_url = _channel_url(echo, "out")
         log.info("in=%s out=%s", in_url, out_url)
 
-        with nullcontext(sys.stdout.buffer) if output_stdout else output_path.open("wb") as fh:
+        with (
+            nullcontext(sys.stdout.buffer) if output_stdout else output_path.open("wb")
+        ) as fh:
+
             def _write_chunk(chunk: bytes) -> None:
                 fh.write(chunk)
                 if output_stdout:

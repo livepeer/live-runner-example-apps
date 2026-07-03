@@ -10,18 +10,29 @@ from dataclasses import dataclass
 from typing import Any
 
 import av
+import numpy as np
 from aiohttp import web
 
 from livepeer_gateway.live_runner import register_runner
 from livepeer_gateway.media_decode import AudioDecodedMediaFrame, VideoDecodedMediaFrame
 from livepeer_gateway.media_output import MediaOutput
-from livepeer_gateway.media_publish import MediaPublish
+from livepeer_gateway.media_publish import (
+    AudioOutputConfig,
+    MediaPublish,
+    MediaPublishConfig,
+    VideoOutputConfig,
+)
 
-log = logging.getLogger("echo")
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8989
-MODES = frozenset({"echo", "gray", "invert", "blur"})
+APP_ID = "livepeer-sample/echo"
+MODES = frozenset({"echo", "gray", "invert", "blur", "robot"})
+# "robot" ring-modulates audio: multiply each sample by a sine carrier at this
+# frequency. Timing-preserving (no resample), so audio and video stay in sync.
+ROBOT_HZ = 220.0
+
+log = logging.getLogger("echo")
 
 state: "EchoSession | None" = None
 
@@ -100,15 +111,35 @@ def _odd_kernel(radius: int) -> int:
     return min(kernel, 99)
 
 
+def _robot_audio(frame: av.AudioFrame) -> av.AudioFrame:
+    # Ring modulation: sample[i] *= sin(2*pi*ROBOT_HZ*t[i]). The carrier phase is
+    # derived from the frame's own timestamp, so it stays continuous across frames
+    # (no clicks) without tracking state. |carrier| <= 1, so no clipping.
+    samples = frame.to_ndarray()  # (channels, n) planar, or (1, n) mono
+    n = samples.shape[-1]
+    t0 = float(frame.pts * frame.time_base) if frame.pts is not None and frame.time_base else 0.0
+    t = t0 + np.arange(n, dtype=np.float32) / frame.sample_rate
+    carrier = np.sin(2.0 * np.pi * ROBOT_HZ * t).astype(np.float32)
+    out = (samples.astype(np.float32) * carrier).astype(samples.dtype)
+    robot = av.AudioFrame.from_ndarray(out, format=frame.format.name, layout=frame.layout.name)
+    robot.sample_rate = frame.sample_rate
+    robot.pts = frame.pts
+    robot.time_base = frame.time_base
+    return robot
+
+
 def _transform_frame(
     decoded: AudioDecodedMediaFrame | VideoDecodedMediaFrame,
     mode: ModeState,
-) -> av.VideoFrame | None:
+) -> av.VideoFrame | av.AudioFrame | None:
+    frame = decoded.frame
+    if decoded.kind == "audio":
+        # Audio echoes back untouched, except "robot" which ring-modulates it.
+        return _robot_audio(frame) if mode.mode == "robot" else frame
     if decoded.kind != "video":
         return None
 
-    frame = decoded.frame
-    if mode.mode == "echo":
+    if mode.mode in ("echo", "robot"):  # robot only alters audio; video passes through
         return frame
 
     import cv2
@@ -154,7 +185,13 @@ async def _handle_echo(request: web.Request) -> web.Response:
     # for production apps, handle errors
     mode = _parse_mode(json.loads(await request.read()))
     # internal_url is the runner-reachable channel address (== public url on a shared network).
-    publisher = MediaPublish(by_name["out"]["internal_url"])
+    # Publish both tracks: video (per-mode) and audio (passthrough, or ring-modulated in
+    # "robot" mode). AudioOutputConfig derives sample rate/layout from the first audio frame,
+    # and a video-only input simply never populates the audio track.
+    publisher = MediaPublish(
+        by_name["out"]["internal_url"],
+        config=MediaPublishConfig(tracks=[VideoOutputConfig(), AudioOutputConfig()]),
+    )
 
     async def _on_frame(decoded) -> None:
         frame = _transform_frame(decoded, mode)
@@ -201,7 +238,7 @@ def main() -> None:
             args.orchestrator,
             secret=args.orchSecret,
             runner_url=args.runner_url,
-            app="livepeer-sample/echo",
+            app=APP_ID,
             mode="persistent",  # realtime trickle streaming is a held-open session
         )
         log.info(

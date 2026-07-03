@@ -23,6 +23,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any
@@ -56,6 +57,14 @@ STATE = {"state": "building", "model": SD_MODEL, "resolution": f"{SD_WIDTH}x{SD_
 SD = StreamDiffusion()                 # the single, container-wide pipeline (loaded once at warm-up)
 _ORCHESTRATOR_URL = "http://localhost:8935"
 session: "StreamSession | None" = None
+
+# Rolling per-frame timing, surfaced via /stats (reset each session). period is the
+# full on_frame-to-on_frame wall time; the stages decompose it (decode/read is what's
+# left after to_ndarray + inference + encode — i.e. MediaOutput fetch+decode + loop).
+METRICS = {
+    "frames": 0, "t0": None, "last_entry": None,
+    "period_sum": 0.0, "ndarray_ms_sum": 0.0, "infer_ms_sum": 0.0, "out_ms_sum": 0.0,
+}
 
 
 @dataclass
@@ -108,6 +117,54 @@ async def _handle_health(request: web.Request) -> web.Response:
     return web.Response(text="ok")
 
 
+async def _handle_stats(request: web.Request) -> web.Response:
+    """Live pipeline metrics for debugging latency/smoothness: diffusion fps and
+    per-frame ms, input frames decoded vs skipped, output frames vs drops."""
+    n = METRICS["frames"]
+    elapsed = (time.perf_counter() - METRICS["t0"]) if METRICS["t0"] else 0.0
+    avg = lambda k: round(METRICS[k] / n, 1) if n else None
+    period, ndarray, infer, enc = avg("period_sum"), avg("ndarray_ms_sum"), avg("infer_ms_sum"), avg("out_ms_sum")
+    decode_read = round(period - (ndarray + infer + enc), 1) if (period and ndarray is not None) else None
+    out: dict[str, Any] = {
+        "state": STATE["state"],
+        "fps": round(n / elapsed, 1) if elapsed > 0 else None,
+        "frames": n,
+        # per-frame budget (ms): period = decode_read + to_ndarray + inference + encode_out
+        "timing_ms": {
+            "period": period,
+            "decode_read": decode_read,
+            "to_ndarray": ndarray,
+            "inference": infer,
+            "encode_out": enc,
+        },
+    }
+    if session is not None:
+        with suppress(Exception):
+            s = session.output.get_stats()
+            sub = getattr(s, "subscriber", None)
+            out["input"] = {
+                "frames_decoded": getattr(s, "video_frames_decoded", None),
+                "segments_consumed": getattr(s, "segments_consumed", None),
+                "skipped_to_latest": getattr(s, "consumer_lag_skip_latest", None),
+                "elapsed_s": round(getattr(s, "elapsed_s", 0.0), 1),
+                # read path (why decode_read spirals): how far behind live + fetch wait/retries
+                "sub_latest_seq": getattr(sub, "latest_seq", None),
+                "sub_wait_ms": getattr(sub, "wait_ms_total", None),
+                "sub_retries": getattr(sub, "get_retries", None),
+                "sub_seq_gaps": getattr(sub, "seq_gap_events", None),
+            }
+        with suppress(Exception):
+            p = session.publisher.get_stats()
+            tr = p.track_queue_stats[0] if getattr(p, "track_queue_stats", None) else None
+            out["output"] = {
+                "frames_in": getattr(tr, "frames_in", None),
+                "dropped_overflow": getattr(tr, "frames_dropped_overflow", None),
+                "dropped_nonmonotonic": getattr(tr, "frames_dropped_non_monotonic_pts", None),
+                "segments_completed": getattr(p, "segments_completed", None),
+            }
+    return web.json_response(out)
+
+
 # --- session ---------------------------------------------------------------
 async def _close_session() -> None:
     global session
@@ -144,34 +201,47 @@ async def _handle_stream(request: web.Request) -> web.Response:
     body = json.loads(await request.read() or "{}")
     prompt = str(body.get("prompt", DEFAULT_PROMPT))
     await asyncio.to_thread(SD.update_prompt, prompt)  # model/res fixed; only prompt changes
+    METRICS.update(frames=0, t0=None, last_entry=None, period_sum=0.0,
+                   ndarray_ms_sum=0.0, infer_ms_sum=0.0, out_ms_sum=0.0)  # fresh per-session timing
 
     # Short GOP/segment so output trickle segments flush ~4x/sec instead of the
     # 2s default -> near-realtime latency (matched on the client's input publish).
     publisher = MediaPublish(
         by_name["out"].get("internal_url") or by_name["out"]["url"],
-        config=MediaPublishConfig(
-            tracks=[VideoOutputConfig(fps=30.0, keyframe_interval_s=0.25)],
-            min_segment_wallclock_s=0.25,
-        ),
     )
 
     async def _on_frame(decoded) -> None:
         if decoded.kind != "video":
             return
-        rgb = decoded.frame.to_ndarray(format="rgb24")
-        out_rgb = await asyncio.to_thread(SD.process, rgb)
+        entry = time.perf_counter()
+        if METRICS["last_entry"] is not None:
+            METRICS["period_sum"] += (entry - METRICS["last_entry"]) * 1000.0
+        METRICS["last_entry"] = entry
+        t1 = time.perf_counter()
+        rgb = decoded.frame.to_ndarray(format="rgb24")           # decoded frame -> numpy
+        t2 = time.perf_counter()
+        out_rgb = await asyncio.to_thread(SD.process, rgb)       # GPU diffusion (thread)
+        t3 = time.perf_counter()
         out = av.VideoFrame.from_ndarray(out_rgb, format="rgb24")
         out.pts = decoded.frame.pts
         out.time_base = decoded.frame.time_base
-        await publisher.write_frame(out)
+        await publisher.write_frame(out)                          # enqueue -> encoder
+        t4 = time.perf_counter()
+        if METRICS["t0"] is None:
+            METRICS["t0"] = entry
+        METRICS["frames"] += 1
+        METRICS["ndarray_ms_sum"] += (t2 - t1) * 1000.0
+        METRICS["infer_ms_sum"] += (t3 - t2) * 1000.0
+        METRICS["out_ms_sum"] += (t4 - t3) * 1000.0
 
-    # Small segment window + default LagPolicy.LATEST: when diffusion can't keep up
-    # with the incoming feed, skip to the newest segment instead of working through
-    # a growing backlog (which would make latency creep up the longer it runs).
+    # Diffuse inline. The read loop is paced by diffusion (~13fps), so it only decodes
+    # frames it actually processes — decoding all 30fps just to drop most wastes GIL
+    # time and starves inference (measured: a decoupled worker fell to ~4fps). Feed
+    # the runner at roughly its throughput (ffmpeg -r 12) so it stays near the edge.
     output = MediaOutput(
         by_name["in"].get("internal_url") or by_name["in"]["url"],
         on_frame=_on_frame,
-        max_segments=2,
+        # max_segments=2,
     )
     session = StreamSession(
         session_id=session_id, in_url=by_name["in"]["url"], out_url=by_name["out"]["url"],
@@ -230,6 +300,7 @@ def main() -> None:
     app["args"] = args
     app.router.add_get("/status", _handle_status)
     app.router.add_get("/health", _handle_health)
+    app.router.add_get("/stats", _handle_stats)
     app.router.add_post("/stream", _handle_stream)
     app.router.add_post("/update", _handle_update)
     app.on_startup.append(_on_startup)

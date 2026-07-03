@@ -1,0 +1,31 @@
+# Offchain demo: orchestrator + a realtime trickle transcoder that self-registers
+# (dynamic). The client streams a video's frames in; the worker rescales and
+# streams transcoded segments back, over trickle channels.
+#
+#   docker compose up -d --build
+#   uv run client.py clip.mp4 --discovery https://localhost:8935/discovery --height 360 --output out.ts
+#
+# The orchestrator is defined once in ../compose.orchestrator.yml and pulled in
+# with `extends`. The app embeds the SDK and registers itself, like hello-world.
+
+services:
+  orchestrator:
+    extends:
+      file: ../compose.orchestrator.yml
+      service: orchestrator
+
+  app:
+    build: .
+    container_name: example_apps_live_transcode
+    # Wait for the orchestrator's healthcheck so registration doesn't race its boot.
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    command:
+      - python
+      - runner.py
+      - --host=0.0.0.0
+      - --orchestrator=https://orchestrator:8935
+      - --orchSecret=abcdef
+      - --runner-url=http://app:8990
+      - --height=${TRANSCODE_HEIGHT:-360}

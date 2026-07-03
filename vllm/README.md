@@ -5,7 +5,7 @@ Runs an OpenAI-compatible LLM on the Livepeer network and consumes it with the *
 |              |                                            |
 | ------------ | ------------------------------------------ |
 | App id       | `vllm/qwen2.5-0.5b-instruct`               |
-| Runner mode  | persistent (single-shot by nature)         |
+| Runner mode  | single-shot                                |
 | Registration | static (orchestrator config + health poll) |
 | Transport    | HTTP + SSE (OpenAI `/v1/chat/completions`) |
 | Port         | 8000 (vLLM), 8080 (gateway)                |
@@ -40,6 +40,17 @@ curl http://localhost:8080/v1/chat/completions \
   -d '{"model":"Qwen/Qwen2.5-0.5B-Instruct","messages":[{"role":"user","content":"hi"}]}'
 ```
 
+### Call it directly (no gateway)
+
+As a **single-shot** runner with `"routing": "label"`, vLLM is reachable straight through the orchestrator's proxy (`/apps/<label>/app/<path>`) — no `gateway.py`, no SDK, not even the OpenAI client. This path skips discovery and payment, so it is **offchain-only**:
+
+```sh
+curl -Nk https://localhost:8935/apps/vllm/app/v1/chat/completions \
+  -d '{"model":"Qwen/Qwen2.5-0.5B-Instruct","stream":true,"messages":[{"role":"user","content":"hi"}]}'
+```
+
+It also shows the orchestrator reverse-proxy is streaming-transparent: the runner's `text/event-stream` passes straight through, no buffering.
+
 ### Streaming (SSE)
 
 > [!IMPORTANT]
@@ -61,14 +72,5 @@ curl -N http://localhost:8080/v1/chat/completions \
 
 ## Run on-chain (paid)
 
-Layer `docker-compose.onchain.yml` to add a remote signer and run the orchestrator on-chain, so vLLM advertises the price from `runners.json` and the gateway pays per call. Needs an Ethereum RPC, a funded signer wallet (deposit + reserve), and an orchestrator wallet — see [On-chain (paid) setup](../README.md#on-chain-paid-setup) in the repo README.
-
-```sh
-cp .env.example .env   # fill in RPC, network, keystore paths, accounts
-docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d
-uv run gateway.py --signer http://localhost:7936 &     # gateway pays per request
-uv run client.py --prompt "In one sentence, what is Livepeer?"
-kill %1; docker compose -f docker-compose.yml -f docker-compose.onchain.yml down
-```
-
-The client is **unchanged** — only the gateway gets `--signer`; it pays per call through the remote signer, so the consumer never sees discovery or payment. The price is set in `runners.json` (see the comments in `.env.example`).
+<!-- TODO(go-livepeer#3955): document the single-shot on-chain paid path (per-call billing, how the direct route / gateway pays) once single-shot billing ships. This PR merges only after #3955 lands, so replace this with the real instructions and undraft — do not merge with this comment in place. -->
+_Paid single-shot path — pending [go-livepeer#3955](https://github.com/livepeer/go-livepeer/issues/3955)._

@@ -5,7 +5,8 @@
       "app": "vllm/qwen2.5-0.5b-instruct",
       "runner_url": "http://vllm:8000",
       "health_url": "/health",
-      "mode": "persistent",
+      "routing": "label",
+      "mode": "single-shot",
       "capacity": 1,
       "price_info": { "price_per_unit": 1, "pixels_per_unit": 1000, "unit": "USD" }
     }

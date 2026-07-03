@@ -1,0 +1,13 @@
+[project]
+name = "livepeer-streaming-asr"
+version = "0.1.0"
+description = "Streaming speech-to-text (WebSocket) example app for the Livepeer network."
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp",          # client WebSocket
+    "livepeer-gateway",
+]
+
+# livepeer-gateway is not on PyPI yet; pull it from the branch.
+[tool.uv.sources]
+livepeer-gateway = { git = "https://github.com/livepeer/livepeer-python-gateway", branch = "ja/live-runner" }

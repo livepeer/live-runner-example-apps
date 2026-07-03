@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Livepeer AI — get your key</title>
+<script src="https://cdn.auth0.com/js/auth0-spa-js/2.1/auth0-spa-js.production.js"></script>
+<style>
+  :root { --bg:#0b0d0e; --card:#15181b; --line:#262b2f; --fg:#e8eef2; --mut:#8b969e; --accent:#00eb88; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.55 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+         background:var(--bg); color:var(--fg); display:flex; justify-content:center; padding:48px 20px; }
+  main { width:100%; max-width:760px; }
+  header { display:flex; align-items:center; gap:14px; margin-bottom:8px; }
+  .logo { width:34px; height:34px; }
+  h1 { font-size:22px; margin:0; font-weight:650; }
+  .sub { color:var(--mut); margin:6px 0 28px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:22px 24px; margin-bottom:18px; }
+  button { background:var(--accent); color:#04120b; border:0; border-radius:10px; padding:11px 18px;
+           font-weight:650; font-size:15px; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--fg); border:1px solid var(--line); }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  .wip-wrap { position:relative; }
+  .wip-wrap pre { user-select:none; -webkit-user-select:none; opacity:.3; filter:grayscale(1); pointer-events:none; }
+  .wip-overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-weight:650; font-size:16px; color:var(--fg); letter-spacing:.5px; background:rgba(11,13,14,.35); border-radius:8px; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .key { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; background:#0b0d0e; border:1px solid var(--line);
+         border-radius:8px; padding:10px 12px; word-break:break-all; color:var(--accent); }
+  .muted { color:var(--mut); font-size:13px; }
+  .step { counter-increment:s; }
+  .step h3::before { content:counter(s); display:inline-flex; width:22px; height:22px; margin-right:9px;
+    background:var(--line); border-radius:50%; align-items:center; justify-content:center; font-size:13px; color:var(--fg); }
+  ol.steps { list-style:none; counter-reset:s; padding:0; margin:0; }
+  h3 { font-size:15px; margin:0 0 8px; display:flex; align-items:center; }
+  pre { background:#0b0d0e; border:1px solid var(--line); border-radius:8px; padding:14px; overflow:auto;
+        font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; margin:8px 0 0; }
+  .tabs { display:flex; gap:6px; margin-bottom:10px; }
+  .tab { padding:6px 12px; border:1px solid var(--line); border-radius:8px; cursor:pointer; font-size:13px; color:var(--mut); }
+  .tab.active { color:var(--fg); border-color:var(--accent); }
+  .hidden { display:none; }
+  .balance { color:var(--accent); font-weight:650; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <svg class="logo" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Livepeer">
+      <rect x="2" y="9"  width="3.4" height="6"  rx="1.7" fill="#00eb88"/>
+      <rect x="7"  y="5"  width="3.4" height="14" rx="1.7" fill="#00eb88"/>
+      <rect x="12" y="2"  width="3.4" height="20" rx="1.7" fill="#00eb88"/>
+      <rect x="17" y="7"  width="3.4" height="10" rx="1.7" fill="#00eb88"/>
+    </svg>
+    <h1>Livepeer AI</h1>
+  </header>
+  <p class="sub">Sign in, get <span class="balance">$5 free</span>, and use Livepeer in OpenAI and Claude — one key.</p>
+
+  <div class="card" id="auth-card">
+    <div class="row" id="signed-out">
+      <button id="login">Sign in with Google</button>
+      <span class="muted">Opens a secure Auth0 popup. No wallet, no crypto.</span>
+    </div>
+    <div class="row hidden" id="signed-in" style="justify-content:space-between">
+      <div>Signed in as <b id="who"></b> · balance <span class="balance" id="bal">…</span></div>
+      <button class="ghost" id="logout">Sign out</button>
+    </div>
+  </div>
+
+  <div class="card hidden" id="key-card">
+    <h3>Your API key</h3>
+    <div class="row">
+      <span class="key" id="apikey">…</span>
+      <button class="ghost" id="copy">Copy</button>
+    </div>
+    <p class="muted">One key, all three surfaces. Shown once — store it safely.</p>
+  </div>
+
+  <div class="card">
+    <div class="tabs">
+      <div class="tab active" data-t="openai">OpenAI</div>
+      <div class="tab" data-t="claude">Claude (MCP)</div>
+      <div class="tab" data-t="sdk" title="Still finalising">SDK</div>
+    </div>
+    <div class="pane" data-p="openai">
+      <pre id="snip-openai"></pre>
+      <p class="muted" style="margin-top:10px">Available models: <span id="models-list"></span></p>
+    </div>
+    <div class="pane hidden" data-p="claude">
+      <pre id="snip-claude"></pre>
+      <p class="muted" style="margin-top:12px">Tools this MCP server exposes:</p>
+      <ul id="mcp-tools" class="muted" style="margin:6px 0 0; padding-left:18px"></ul>
+    </div>
+    <div class="pane hidden" data-p="sdk">
+      <div class="wip-wrap">
+        <pre id="snip-sdk"></pre>
+        <div class="wip-overlay">Preview · not for production</div>
+      </div>
+    </div>
+  </div>
+
+  <p class="muted">When your $5 runs out every surface returns <code>402</code> with a link to add a card.</p>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

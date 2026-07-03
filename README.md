@@ -16,6 +16,7 @@ Live runners are not on go-livepeer `main` yet and currently live on the `ja/liv
 | [`streamdiffusion`](./streamdiffusion) | persistent | static | trickle (realtime video, needs an NVIDIA GPU) |
 | [`streamdiffusion-ws`](./streamdiffusion-ws) | persistent | static | WebSocket + MJPEG (a third-party container, reverse-proxied; needs an NVIDIA GPU) |
 | [`vllm`](./vllm) | persistent (single-shot by nature) | static | HTTP + SSE (OpenAI API, via a local gateway) |
+| [`ffmpeg`](./ffmpeg) | persistent (single-shot by nature) | dynamic | HTTP (JSON request/response) — multi-op tool → agent |
 
 More will follow. Each example is self-contained and runs **offchain** (free, no wallet); most also run **on-chain** (paid). See each README for the commands.
 

@@ -3,6 +3,7 @@
 
 Livepeer integration (grep `# Livepeer:`):
   1. reserve_session()      — discover orchestrators advertising the app, reserve one
+                             (to be removed once #4 lands)
   2. call_runner()          — invoke the app through the orchestrator
   3. stop_runner_session()  — end the session (settles payment on-chain)
 """
@@ -44,7 +45,7 @@ async def main() -> None:
     signer_url = args.signer.strip() or None
     session = None
     try:
-        session = await reserve_session(  # Livepeer: 1
+        session = await reserve_session(  # Livepeer: 1 (to be removed once #4 lands)
             discovery_url=args.discovery,
             app=APP_ID,
             signer_url=signer_url,

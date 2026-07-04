@@ -12,6 +12,9 @@ The smallest possible app on the Livepeer network: a synchronous request/respons
 
 Prerequisites (Docker, `uv`, and the not-yet-released `livepeer-gateway` SDK — pinned in `pyproject.toml`) and the shared on-chain/payment setup live in the [repo README](../README.md).
 
+> [!NOTE]
+> This app currently runs in **persistent** mode. It will switch to **single-shot** once [#4](https://github.com/livepeer/live-runner-example-apps/issues/4) ships.
+
 ## How it's wired
 
 The app self-registers with the orchestrator (`register_runner`) and exposes a single `POST /hello`, reverse-proxied through the orchestrator. The client discovers the app via `/discovery`, reserves a session, calls `/hello`, and releases the session — one request, one response. This is the base flow (discover → reserve → call → release) that every other example builds on.
@@ -46,7 +49,7 @@ The app registers with a price (`--price` / `--pixels-per-unit` from `.env`) and
 
 ## Run without Docker
 
-Start an orchestrator built from `ja/live-runner`, then the app and client directly:
+Start an orchestrator built from `ja/live-runner` (see [Build from source](https://docs.livepeer.org/v1/orchestrators/guides/install-go-livepeer#build-from-source)), then the app and client directly:
 
 ```sh
 ./livepeer -orchestrator -useLiveRunners -serviceAddr localhost:8935 -orchSecret abcdef -v 6

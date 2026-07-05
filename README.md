@@ -1,36 +1,69 @@
 # Live runner example apps
 
-Example **apps** for the Livepeer network. An app is a container you build and put on the network: a normal HTTP or WebSocket service that exposes your endpoints. Orchestrators host and run your app via the **live runner**, and clients call it through the orchestrator using the [livepeer-gateway](https://github.com/livepeer/livepeer-python-gateway) Python SDK.
+Example **apps** for the Livepeer **live runner** — go-livepeer's new way to run any app on the network. You ship a normal HTTP / WebSocket / video service; an orchestrator hosts it, and clients reach it through the orchestrator with the [livepeer-gateway](https://github.com/livepeer/livepeer-python-gateway) SDK.
 
-Live runners are not on go-livepeer `main` yet and currently live on the `ja/live-runner` branch. Until it merges, both the orchestrator image and the SDK come from that branch.
+The point is to **swap the compute without changing your app**: the same container and the same client run whether it's served by your laptop, one orchestrator, or a whole market of them — the network decides who runs it and (on-chain) settles payment. Write the app once; move the compute freely.
+
+> [!NOTE]
+> Live runners aren't on go-livepeer `main` yet — they live on the `ja/live-runner` branch. Until it merges, both the orchestrator image and the SDK come from that branch.
+
+## Communication schemas
+
+The orchestrator is a **transparent reverse proxy**: every endpoint you expose is passed through to your app unchanged, so you write an ordinary service and it works on the network as-is. Any transport works:
+
+- **HTTP** request/response — the common case. (`hello-world`)
+- **HTTP + SSE** — streamed / token responses. (`vllm`)
+- **Trickle** — continuous realtime video in/out. (`echo`)
+- **WebSocket** — long-lived bidirectional sessions. (external: `scope`)
 
 > [!IMPORTANT]
-> SSE streaming (used by the [`vllm`](./vllm) example) depends on gateway PR [#25](https://github.com/livepeer/livepeer-python-gateway/pull/25), which is not yet merged. Until it lands, streaming is only available from the SDK's `rs/live-runner-streaming` branch, not `ja/live-runner`.
+> SSE streaming (used by `vllm`) depends on gateway PR [#25](https://github.com/livepeer/livepeer-python-gateway/pull/25), not yet merged. Until it lands, streaming is only on the SDK's `rs/live-runner-streaming` branch, not `ja/live-runner`.
 
 ## Examples
 
-| Example | Runner mode | Registration | Transport |
-| ------- | ----------- | ------------ | --------- |
-| [`hello-world`](./hello-world) | persistent (single-shot by nature) | dynamic | HTTP (JSON request/response) |
-| [`echo`](./echo) | persistent | dynamic | trickle (realtime video) |
-| [`vllm`](./vllm) | persistent (single-shot by nature) | static | HTTP + SSE (OpenAI API, via a local gateway) |
+| Example                        | Goal                                            | Mode                               | Registration | Transport   |
+| ------------------------------ | ----------------------------------------------- | ---------------------------------- | ------------ | ----------- |
+| [`hello-world`](./hello-world) | The simplest app: one request, one response     | persistent (single-shot by nature) | dynamic      | HTTP (JSON) |
+| [`echo`](./echo)               | Realtime video, transformed and echoed back     | persistent                         | dynamic      | trickle     |
+| [`vllm`](./vllm)               | Drop-in OpenAI API; the client stays unmodified | persistent (single-shot by nature) | static       | HTTP + SSE  |
 
-More will follow. Each example is self-contained and runs **offchain** (free, no wallet); most also run **on-chain** (paid). See each README for the commands.
+Start with `hello-world` (the smallest end-to-end path); the others each layer on one new idea. More will follow, including a full example that exercises every feature. Each is self-contained and runs **offchain** (free, no wallet); most also run **on-chain** (paid) — see each README.
 
-## Runner mode: persistent vs single-shot
+## Runner modes
 
-The runner mode is set at registration and **defaults to `persistent`** — both the SDK's `register_runner(...)` and the static `runners.json`. The examples set it explicitly for clarity.
+Set at registration; **defaults to `persistent`** (both `register_runner(...)` and `runners.json`). The examples set it explicitly.
 
-- **Persistent** — a held-open session billed per second of wall-clock while it's open. Best for realtime / streaming. (`echo`.)
-- **Single-shot** — one request in, one response out. Best for batch / request-response work. (`hello-world`, `vllm` are single-shot by nature.)
+- **Persistent** — a held-open session billed per second of wall-clock. Best for realtime / streaming. (`echo`)
+- **Single-shot** — one request in, one response out. Best for batch / request-response. (`hello-world`, `vllm` are single-shot by nature.)
 
 > [!IMPORTANT]
-> Single-shot payment isn't implemented yet ([go-livepeer#3955](https://github.com/livepeer/go-livepeer/issues/3955)), so `hello-world` and `vllm` register as **persistent**. On-chain that bills per second for the whole open session and overbills short calls, so keep them **offchain-only** until #3955 lands ([#5](https://github.com/livepeer/live-runner-example-apps/issues/5)).
+> Single-shot payment isn't implemented yet ([go-livepeer#3955](https://github.com/livepeer/go-livepeer/issues/3955)), so `hello-world` and `vllm` register as **persistent**. On-chain that bills per second for the whole open session and overbills short calls — keep them **offchain-only** until #3955 lands ([#5](https://github.com/livepeer/live-runner-example-apps/issues/5)).
 
-## Registration: dynamic vs static
+## Registration
 
-- **Dynamic** — the app self-registers with the orchestrator via the SDK (`register_runner`) and sends heartbeats; the orchestrator drops it when heartbeats stop. Best for apps that come and go. (`hello-world` is dynamic.)
-- **Static** — the orchestrator is configured with the app's URL in a `runners.json` and polls a health endpoint; the app needs no SDK. Best for fixed, long-running deployments.
+- **Dynamic** — the app self-registers via the SDK (`register_runner`) and heartbeats; the orchestrator drops it when heartbeats stop. Best for apps that come and go. (`hello-world`, `echo`)
+- **Static** — the orchestrator is configured with the app's URL in a `runners.json` and health-polls it; the app needs no SDK. Best for fixed, long-running deployments. (`vllm`)
+
+## Calling your app
+
+The client side is the same shape for every app — **discover → reserve → call → release**:
+
+1. **Discover** the app via the orchestrator's `/discovery`.
+2. **Reserve** a session (`reserve_session`).
+3. **Call** it — one `call_runner`, streamed frames, or a WebSocket, depending on transport.
+4. **Release** the session (`stop_runner_session`), which settles payment on-chain.
+
+Each example's `client.py` shows its exact calls — grep `# Livepeer:` to find them.
+
+## External examples
+
+Apps that integrate the live runner and live in their own repos — production deployments and standalone examples alike:
+
+| Project                                                                    | What it is                                       | Transport           |
+| -------------------------------------------------------------------------- | ------------------------------------------------ | ------------------- |
+| [daydreamlive/scope](https://github.com/daydreamlive/scope/tree/ja/runner) | Real-time AI video with downloadable LoRA models | WebSocket + trickle |
+
+Built one? Open a PR to list it here.
 
 ## Prerequisites
 

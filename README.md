@@ -98,9 +98,10 @@ Each example's `client.py` shows its exact calls — grep `# Livepeer:` to find 
 
 Apps that integrate the live runner and live in their own repos — production deployments and standalone examples alike:
 
-| Project                                                                    | What it is                                       | Transport           |
-| -------------------------------------------------------------------------- | ------------------------------------------------ | ------------------- |
-| [daydreamlive/scope](https://github.com/daydreamlive/scope/tree/ja/runner) | Real-time AI video with downloadable LoRA models | WebSocket + trickle |
+| Project                                                                                                     | What it is                                                                                                                                                     | Transport           |
+| ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| [daydreamlive/scope](https://github.com/daydreamlive/scope/tree/ja/runner)                                  | Real-time AI video with downloadable LoRA models                                                                                                               | WebSocket + trickle |
+| [moatus/audio-diarized-transcription-runner](https://github.com/moatus/audio-diarized-transcription-runner) | Speaker diarization + transcription together (OpenAI-compatible, NVIDIA NeMo) — testable via [`audio-diarized-transcription/`](./audio-diarized-transcription) | HTTP + WebSocket    |
 
 Built one? [Open a PR](https://github.com/livepeer/live-runner-example-apps/compare) to list it here.
 

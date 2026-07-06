@@ -1,0 +1,61 @@
+# Standalone run for the audio-diarized-transcription-runner. Brings up ONLY the
+# runner (no orchestrator) so you can test the app directly — build + run + call.
+#   docker compose up -d
+#   curl -fsS http://localhost:8080/healthz
+# See README.md for the full test flow. Requires an NVIDIA GPU.
+#
+# The image is built from the runner's own repo (it is not published to a
+# registry yet):
+#   git clone https://github.com/moatus/audio-diarized-transcription-runner
+#   cd audio-diarized-transcription-runner && ./build-images.sh build
+# That produces moatus/audio-diarized-transcription-runner:v0.1.0, referenced below.
+
+services:
+  audio_diarized_transcription_runner:
+    image: ${REGISTRY:-moatus}/audio-diarized-transcription-runner:${TAG:-v0.1.0}
+    container_name: example_apps_audio_diarized_transcription
+    runtime: nvidia
+    ipc: host
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    environment:
+      - RUNNER_PORT=8080
+      - DEVICE=${NEMO_DEVICE:-cuda}
+      - CAPABILITY_NAME=openai:audio-transcriptions
+      - MODEL_CACHE_DIR=/models
+      # Bounded route holds one job at a time; a 2nd concurrent call gets 429.
+      # Bump this if you want parallelism (each job needs its own VRAM headroom).
+      - MAX_QUEUE_SIZE=${NEMO_MAX_QUEUE_SIZE:-1}
+      - MAX_AUDIO_MB=${NEMO_MAX_AUDIO_MB:-100}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    volumes:
+      # NeMo / Hugging Face / torch caches persist here so weights download once.
+      - audio-diarized-transcription-models:/models
+      - audio-diarized-transcription-nemo-cache:/root/.cache/torch/NeMo
+    ports:
+      - "${RUNNER_PORT:-8080}:8080"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+volumes:
+  audio-diarized-transcription-models: {}
+  audio-diarized-transcription-nemo-cache: {}

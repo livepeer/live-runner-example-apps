@@ -1,0 +1,17 @@
+{
+  "runners": [
+    {
+      "label": "audio-diarized-transcription",
+      "app": "moatus/audio-diarized-transcription",
+      "runner_url": "http://audio_diarized_transcription_runner:8080",
+      "health_url": "/healthz",
+      "mode": "persistent",
+      "capacity": 1,
+      "price_info": {
+        "price_per_unit": 1,
+        "pixels_per_unit": 1000,
+        "unit": "USD"
+      }
+    }
+  ]
+}

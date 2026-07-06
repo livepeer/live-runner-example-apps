@@ -95,10 +95,23 @@ curl -s http://localhost:8080/v1/audio/transcriptions \
 
 Drop `-F diarization=true` and it behaves like a plain OpenAI transcription (text only) — that's the "additive" design.
 
+## Run on-chain (paid)
+
+Everything above is **offchain (free)** — no wallet, no payments. To run **on-chain**, layer `docker-compose.onchain.yml`: it adds a remote signer and re-points the orchestrator on-chain, so the runner advertises the price from `runners.json` and the client pays per second through the signer. Needs an Ethereum RPC, a funded signer wallet (deposit + reserve), and an orchestrator wallet — see [On-chain (paid) setup](../README.md#on-chain-paid-setup) in the repo README.
+
+```sh
+cp .env.example .env   # fill in NETWORK, ETH_RPC_URL, keystore paths, accounts, pricing
+docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d
+uv run client.py sample.wav --signer http://localhost:7936 --all
+```
+
+Only the client gains `--signer`; the runner and the flow are otherwise unchanged. `start_payments()` (a no-op offchain) now funds the held session per second via the signer, so the same multipart/WS/live-session calls settle on-chain.
+
 ## 4. Tear down
 
 ```sh
 docker compose down                    # add -v to also drop the model cache volume
+# on-chain: docker compose -f docker-compose.yml -f docker-compose.onchain.yml down
 ```
 
 ## Notes

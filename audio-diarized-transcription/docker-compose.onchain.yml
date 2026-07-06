@@ -1,0 +1,45 @@
+# On-chain payment overlay. Layer it on the offchain base:
+#   docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d
+#
+# Adds the shared remote signer, re-points the orchestrator on-chain (see
+# ../compose.onchain.yml), and re-mounts runners.json so the statically attached
+# runner advertises its price and the orchestrator issues a payment challenge.
+# Requires a local .env (gitignored); copy .env.example and fill it in. Then the
+# client pays per call through the signer:
+#   uv run client.py sample.wav --signer http://localhost:7936 --all
+
+services:
+  signer:
+    extends:
+      file: ../compose.onchain.yml
+      service: signer
+    ports:
+      - "7936:7936"
+
+  orchestrator:
+    extends:
+      file: ../compose.onchain.yml
+      service: orchestrator
+    # Same on-chain flags as ../compose.onchain.yml, restated to add
+    # -liveRunnerConfig (`extends` can't append one) + mount runners.json.
+    command:
+      - -orchestrator
+      - -useLiveRunners
+      - -serviceAddr=127.0.0.1:8935
+      - -httpAddr=0.0.0.0:8935
+      - -liveRunnerAddr=https://orchestrator:8935
+      - -orchSecret=abcdef
+      - -network=${NETWORK}
+      - -ethUrl=${ETH_RPC_URL}
+      - -ethKeystorePath=/keystore
+      - -ethAcctAddr=${ORCH_ETH_ACCT}
+      - -ethPassword=${ORCH_ETH_PASSWORD}
+      - -ethOrchAddr=${ORCH_ONCHAIN_ADDR}
+      - -pricePerUnit=0
+      - -ticketEV=1000000000000
+      - -liveRunnerConfig=/config/runners.json
+      - -monitor=false
+      - -v=6
+    volumes:
+      - ${ORCH_KEYSTORE_DIR}:/keystore:ro
+      - ./runners.json:/config/runners.json:ro

@@ -28,6 +28,9 @@ services:
       # Cap per-win payout so redemptions stay cheap and frequent
       - -maxFaceValue=10000000000000
       - -v=6
+      # Local demo only: skips signer caller-auth (it binds to 0.0.0.0 and signs
+      # for any caller). In production, authorize callers via -remoteSignerWebhookUrl.
+      - -remoteSignerAllowNoAuth
     volumes:
       - ${SIGNER_KEYSTORE_DIR}:/keystore:ro
 

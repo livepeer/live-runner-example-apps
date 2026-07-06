@@ -6,6 +6,11 @@ repos:
     hooks:
       - id: black # Python formatter (line length 88, the default we already follow)
 
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff # Python linter (pyflakes + pycodestyle; black stays the formatter)
+
   - repo: https://github.com/rbubley/mirrors-prettier
     rev: v3.3.3
     hooks:

@@ -1,34 +1,33 @@
 #!/usr/bin/env python3
 """Minimal local OpenAI -> Livepeer gateway.
 
-A lightweight, single-app process you run on your host. Exposes a normal OpenAI
-endpoint on localhost and forwards each request through the orchestrator to the
-vLLM runner, doing Livepeer's discovery + payment handshake behind the scenes.
-Point ANY OpenAI client at it -- no code changes, any language -- and it works
-on-chain:
+A lightweight, single-app process you run on your host. Exposes a normal OpenAI endpoint
+on localhost and forwards each request through the orchestrator to the vLLM runner,
+doing Livepeer's discovery + payment handshake behind the scenes. Point ANY OpenAI
+client at it -- no code changes, any language -- and it works on-chain:
 
     uv run gateway.py --signer http://localhost:7936 &
     export OPENAI_BASE_URL=http://localhost:8080/v1 OPENAI_API_KEY=unused
     # then plain `openai`, curl, or any SDK just works
 
-Each request: reserve a session, forward the body, release the session. call_runner
-does the 402 payment challenge internally, so the client never sees discovery or
-payment. (Release matters: the runner has capacity 1, so an unreleased session
-would block the next call.)
+Each request: reserve a session, forward the body, release the session. call_runner does
+the 402 payment challenge internally, so the client never sees discovery or payment.
+(Release matters: the runner has capacity 1, so an unreleased session would block the
+next call.)
 
 Livepeer integration (grep `# Livepeer:`):
   1. reserve_session()      — discover the runner, reserve a session
-  2. call_runner()          — forward the request through the orchestrator (handles 402 payment)
+  2. call_runner()          — forward the request through the orchestrator (pays 402)
   3. stop_runner_session()  — release the session
 
-These three calls are the *entire* Livepeer surface. They live here, and only
-here, because an OpenAI client can't do discovery or settle payments itself — so
-`client.py` (and any OpenAI SDK/curl) stays 100% stock, unaware of Livepeer.
+These three calls are the *entire* Livepeer surface. They live here, and only here,
+because an OpenAI client can't do discovery or settle payments itself — so `client.py`
+(and any OpenAI SDK/curl) stays 100% stock, unaware of Livepeer.
 
-Registration is static (no register_runner): the orchestrator reads `runners.json`
-via -liveRunnerConfig and health-polls the runner. The vLLM container is a
-third-party image with zero Livepeer code, which is exactly why it's static —
-there's no app to put a register_runner in (contrast hello-world/echo). See docker-compose.yml.
+Registration is static (no register_runner): the orchestrator reads `runners.json` via
+-liveRunnerConfig and health-polls the runner. The vLLM container is a third-party image
+with zero Livepeer code, which is exactly why it's static — there's no app to put a
+register_runner in (contrast hello-world/echo). See docker-compose.yml.
 """
 
 from __future__ import annotations

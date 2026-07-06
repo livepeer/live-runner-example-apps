@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """echo client: reserve a session, stream video through the runner, settle up.
 
-Publishes video frames into the runner's trickle `in` channel and reads the
-transformed frames back from `out`. Input/output can be files or stdin/stdout
-pipes, so you can chain `ffmpeg -> client -> ffplay`.
+Publishes video frames into the runner's trickle `in` channel and reads the transformed
+frames back from `out`. Input/output can be files or stdin/stdout pipes, so you can
+chain `ffmpeg -> client -> ffplay`.
 
 Livepeer integration (grep `# Livepeer:`):
   1. reserve_session()        — discover the runner, reserve a session
@@ -45,13 +45,18 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "input",
-        help="input video file, or - to read an MPEG-TS stream from stdin (e.g. piped from ffmpeg)",
+        help=(
+            "Input video file, or - to read an MPEG-TS stream from stdin "
+            "(e.g. piped from ffmpeg)"
+        ),
     )
     parser.add_argument("--discovery", default=DEFAULT_DISCOVERY)
     parser.add_argument(
         "--output",
         default=DEFAULT_OUTPUT,
-        help="output file for the echoed stream, or - for stdout (e.g. piped to ffplay)",
+        help=(
+            "Output file for the echoed stream, or - for stdout (e.g. piped to ffplay)"
+        ),
     )
     parser.add_argument("--radius", type=int, default=75)
     parser.add_argument(
@@ -64,7 +69,10 @@ def _parse_args() -> argparse.Namespace:
         "--mode",
         choices=MODES,
         default="echo",
-        help="Transform the runner applies: echo (passthrough), gray, invert, or blur. blur sweeps the radius; the rest are static.",
+        help=(
+            "Transform the runner applies: echo (passthrough), gray, invert, or blur. "
+            "blur sweeps the radius; the rest are static."
+        ),
     )
     parser.add_argument(
         "--blur-period",

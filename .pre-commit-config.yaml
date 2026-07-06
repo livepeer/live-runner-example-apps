@@ -1,0 +1,22 @@
+# Formatting/lint hooks, run on `git commit` (after `pre-commit install`) and in CI.
+# One source of truth for local and CI: `.github/workflows/lint.yml` runs the same hooks.
+# Bump versions with `pre-commit autoupdate`.
+repos:
+  - repo: https://github.com/psf/black-pre-commit-mirror
+    rev: 24.10.0
+    hooks:
+      - id: black # Python formatter (line length 88, the default we already follow)
+
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: v3.3.3
+    hooks:
+      - id: prettier # Markdown/YAML/JSON formatter (proseWrap: preserve — won't rewrap prose)
+        types_or: [markdown, yaml, json]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-merge-conflict

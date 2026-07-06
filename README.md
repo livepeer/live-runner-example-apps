@@ -9,7 +9,7 @@ The point is to **swap the compute without changing your app — permissionlessl
 
 ## How it works
 
-Your app is a plain service that clients reach *through* the orchestrator — the SDK handles discovery / session / payment, and, on-chain, a remote signer settles it. The client never talks to your app directly.
+Your app is a plain service that clients reach _through_ the orchestrator — the SDK handles discovery / session / payment, and, on-chain, a remote signer settles it. The client never talks to your app directly.
 
 ```mermaid
 flowchart LR
@@ -71,7 +71,7 @@ flowchart LR
 
 ## Runner modes
 
-Chosen *at* registration (above); **defaults to `persistent`** — set on both `register_runner(...)` and in `runners.json`. The examples set it explicitly.
+Chosen _at_ registration (above); **defaults to `persistent`** — set on both `register_runner(...)` and in `runners.json`. The examples set it explicitly.
 
 - **Persistent** — a held-open session billed per second of wall-clock. Best for realtime / streaming. (`echo`)
 - **Single-shot** — one request in, one response out. Best for batch / request-response. (`hello-world`, `vllm` are single-shot by nature.)
@@ -150,3 +150,7 @@ Each entry lists its `runners` with an `app`, `version`, capacity, and `price_in
 
 - Apps bind to `127.0.0.1` by default (safe for local runs). In a container the compose files pass `--host=0.0.0.0` so the orchestrator can reach the app.
 - Orchestrators serve a self-signed TLS cert; the SDK skips verification.
+
+## Contributing
+
+Issues and PRs welcome — see [CONTRIBUTING.md](./CONTRIBUTING.md).

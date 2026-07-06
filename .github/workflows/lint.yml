@@ -1,0 +1,17 @@
+name: lint
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      # Runs every hook in .pre-commit-config.yaml against all files.
+      - uses: pre-commit/action@v3.0.1

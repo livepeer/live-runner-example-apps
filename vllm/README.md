@@ -24,9 +24,9 @@ Two sides:
 - **Network (compose):** the `orchestrator` (configured with `runners.json`) + the official `vllm` image. The on-chain overlay adds a `signer`.
 - **Consumer (host):** the local gateway (`gateway.py`) — an OpenAI endpoint on `:8080` that discovers the runner and (on-chain) pays via the signer — plus any OpenAI client (`client.py`, another SDK, `curl`).
 
-The local gateway is a *client-side* component, so it runs on the host like the client, not in the infra compose.
+The local gateway is a _client-side_ component, so it runs on the host like the client, not in the infra compose.
 
-The gateway is the **only** Livepeer-aware piece in the whole path — and it's tiny: three SDK calls, `reserve_session` → `call_runner` → `stop_runner_session` (grep `# Livepeer:` in [gateway.py](gateway.py)). They exist *purely* because an OpenAI client has no idea how to discover a runner or settle Livepeer's payments. Move that glue into the gateway and everything else — `client.py`, any OpenAI SDK, `curl` — stays 100% stock OpenAI, oblivious to Livepeer.
+The gateway is the **only** Livepeer-aware piece in the whole path — and it's tiny: three SDK calls, `reserve_session` → `call_runner` → `stop_runner_session` (grep `# Livepeer:` in [gateway.py](gateway.py)). They exist _purely_ because an OpenAI client has no idea how to discover a runner or settle Livepeer's payments. Move that glue into the gateway and everything else — `client.py`, any OpenAI SDK, `curl` — stays 100% stock OpenAI, oblivious to Livepeer.
 
 ## Run offchain (free)
 
@@ -38,7 +38,7 @@ uv run client.py --prompt "In one sentence, what is Livepeer?"
 kill %1; docker compose down           # stop the gateway, then the stack
 ```
 
-`client.py` is stock `openai` with `base_url=http://localhost:8080/v1` (the `api_key` is ignored — it just needs *a* value). Pass a `--model` that matches `VLLM_MODEL`, the name vLLM serves under. Any OpenAI tool works the same way — e.g. `curl`:
+`client.py` is stock `openai` with `base_url=http://localhost:8080/v1` (the `api_key` is ignored — it just needs _a_ value). Pass a `--model` that matches `VLLM_MODEL`, the name vLLM serves under. Any OpenAI tool works the same way — e.g. `curl`:
 
 ```sh
 curl http://localhost:8080/v1/chat/completions \

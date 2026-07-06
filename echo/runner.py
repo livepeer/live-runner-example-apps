@@ -10,7 +10,8 @@ Livepeer integration (grep `# Livepeer:`):
   3. registration.close()       — deregister (cleanup)
 
 Media I/O over trickle uses MediaOutput (read frames) and MediaPublish (write frames).
-/echo and /update are ordinary HTTP handlers; being on the network doesn't change how you write them.
+/echo and /update are ordinary HTTP handlers; being on the network doesn't change how
+you write them.
 """
 
 from __future__ import annotations

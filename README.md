@@ -7,6 +7,23 @@ The point is to **swap the compute without changing your app — permissionlessl
 > [!NOTE]
 > Live runners aren't on go-livepeer `main` yet — they live on the [`ja/live-runner`](https://github.com/livepeer/go-livepeer/tree/ja/live-runner) branch. Until it merges, both the orchestrator image and the SDK come from that branch.
 
+## How it works
+
+Your app is a plain service that clients reach *through* the orchestrator — the SDK handles discovery / session / payment, and, on-chain, a remote signer settles it. The client never talks to your app directly.
+
+```mermaid
+flowchart LR
+  client["Client<br/>(livepeer-gateway SDK)"]
+  orch["Orchestrator<br/>proxy · discovery · payment"]
+  app["Your app<br/>HTTP / WebSocket / trickle"]
+  signer["Remote signer<br/>(on-chain)"]
+
+  client -->|"discover → reserve → call → release"| orch
+  orch -->|"forwards your endpoints, unchanged"| app
+  app -.->|"dynamic: register_runner · static: runners.json"| orch
+  signer <-.->|"micropayment tickets"| orch
+```
+
 ## Communication schemas
 
 The orchestrator is a **transparent reverse proxy**: every endpoint you expose is passed through to your app unchanged, so you write an ordinary service and it runs on the network as-is. The transports supported today:
@@ -37,6 +54,20 @@ How the app attaches to the orchestrator:
 
 - **Dynamic** — the app self-registers via the SDK (`register_runner`) and heartbeats; the orchestrator drops it when heartbeats stop. Best for apps that come and go. (`hello-world`, `echo`)
 - **Static** — the orchestrator is configured with the app's URL in a `runners.json` and health-polls it; the app needs no SDK. Best for fixed, long-running deployments. (`vllm`)
+
+The arrow flips — dynamic, the app announces itself; static, the orchestrator is told about a passive app:
+
+```mermaid
+flowchart LR
+  subgraph Dynamic
+    direction LR
+    a1["App<br/>(embeds SDK)"] -->|"register_runner + heartbeat"| o1["Orchestrator"]
+  end
+  subgraph Static
+    direction LR
+    o2["Orchestrator<br/>(reads runners.json)"] -->|"health-poll"| a2["App<br/>(no Livepeer code)"]
+  end
+```
 
 ## Runner modes
 

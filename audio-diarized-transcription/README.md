@@ -142,4 +142,6 @@ speaker_1: october twenty four nineteen seventy
 > [!NOTE]
 > Rides the SDK's `rs/live-runner-session-payments` branch (pinned in `pyproject.toml`), not merged into `ja/live-runner` yet — same situation as the streaming branch.
 >
-> **Status:** the **bounded multipart** call through the orchestrator session is verified end-to-end. The **`--stream`** WS path is verified against the runner directly (`ws://…:8080`, and the runner's own `…_streaming_smoke.py`), but _through the orchestrator_ it currently connects and loads models yet doesn't relay events back for this runner's true-streaming route — a go-livepeer WS-proxy interaction still being chased (`streamdiffusion-ws` proves WS-through-proxy works in general). One caveat regardless of transport: the runner **(re)loads the streaming models per WS connection (~7 s)** and buffers frames meanwhile, so `--settle` holds before `finish` to let them drain.
+> **Status:** both transports are verified end-to-end through the orchestrator session — **bounded multipart** (`speaker_0`/`speaker_1`) and **`--stream`** true-streaming (incremental `transcript.segment` events → `finished`). The orchestrator relays the WebSocket in both directions; there is no proxy or SDK gap here.
+>
+> One runner-side caveat: it **(re)loads the streaming models per WS connection (~7 s)** and buffers frames meanwhile, so `--settle` holds before `finish` to let them drain (bump it for longer clips). Pre-warming the streaming pipeline at startup instead of per-connection would remove that wait.

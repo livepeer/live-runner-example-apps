@@ -141,13 +141,10 @@ async def _stream(
             if msg.type != aiohttp.WSMsgType.TEXT:
                 continue
             event = msg.json()
-            kind = event.get("type")
-            if kind == "speaker.update":
-                print(f"[stream] speaker.update -> {event.get('speaker') or event}")
-            elif kind == "transcript.segment":
-                seg = event.get("text") or event.get("segment", {}).get("text", "")
+            kind = event.get("event_type")  # NB: runner uses event_type, not type
+            if kind == "transcript.segment" and event.get("text"):
                 tag = "~" if event.get("is_provisional") else " "
-                print(f"[stream]{tag}{event.get('speaker', '')}: {seg}")
+                print(f"[stream]{tag}{event.get('speaker', '')}: {event['text']}")
             elif kind == "transcript.session.finished":
                 print("[stream] finished")
                 break

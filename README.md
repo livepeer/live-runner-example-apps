@@ -150,3 +150,7 @@ Each entry lists its `runners` with an `app`, `version`, capacity, and `price_in
 
 - Apps bind to `127.0.0.1` by default (safe for local runs). In a container the compose files pass `--host=0.0.0.0` so the orchestrator can reach the app.
 - Orchestrators serve a self-signed TLS cert; the SDK skips verification.
+
+## Contributing
+
+Issues and PRs welcome — see [CONTRIBUTING.md](./CONTRIBUTING.md).

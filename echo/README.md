@@ -14,9 +14,9 @@ Prerequisites (Docker, `uv`, the not-yet-released SDK) and the shared setup are 
 
 ## How it's wired
 
-The app exposes HTTP `/echo` (start a session, create trickle `in`/`out` channels) and `/update` (change the transform mid-stream), both reverse-proxied through the orchestrator. The client reserves a session, publishes video frames into the `in` channel, and reads the transformed output from the `out` channel. Frame decode/encode is PyAV; the transforms are OpenCV.
+The app is **dynamically registered**: it self-registers with the orchestrator via `register_runner` ([runner.py](runner.py)) and exposes `POST /echo` (start a session, open trickle `in`/`out` channels with `create_trickle_channels`) and `POST /update` (change the transform mid-stream), both reverse-proxied through the orchestrator. The client calls it with `reserve_session` → `MediaPublish`/`MediaOutput` → `stop_runner_session` ([client.py](client.py)) — reserve a session, publish frames into `in`, read the transformed output from `out`, release. Grep `# Livepeer:` in either file to see the exact calls. Frame decode/encode is PyAV; the transforms are OpenCV.
 
-Because the live path is stateful (channels live for the session), the app runs the SDK and is **dynamic** — there's no static-runner equivalent for continuous media.
+echo registers **dynamically** as the natural fit for a stateful app that already embeds the SDK (heartbeats, capacity, lifecycle). Trickle itself isn't tied to dynamic, though: `create_trickle_channels` rides the orchestrator's per-request `Livepeer-Session-Control` header, so a static runner exposing the same endpoints could open channels too.
 
 ## Run offchain (free)
 
@@ -27,7 +27,7 @@ docker compose up -d --build
 curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # confirm livepeer-sample/echo registered
 ```
 
-The client publishes a video stream into the echo and writes the echoed result back. The input is a file path, or `-` to read an MPEG-TS stream from stdin (so you can pipe in anything ffmpeg produces). The output is a file, or `-` to write the echoed stream to stdout (pipe it to a player).
+The input is a file path, or `-` to read an MPEG-TS stream from stdin (so you can pipe in anything ffmpeg produces); the output is a file, or `-` to write the echoed stream to stdout (pipe it to a player).
 
 **From a file** — writes the result to `echo-out.ts`:
 
@@ -59,8 +59,8 @@ Swap `/dev/video0` for your node. If that size/format isn't supported, list the 
 
 The `ffplay` low-delay flags (`-fflags nobuffer -flags low_delay -framedrop`) keep the preview close to realtime; drop them and it buffers.
 
-Stop the stack with `docker compose down`.
-
 - `--mode` picks the transform: `echo` (passthrough, the default), `gray`, `invert`, or `blur`. Use `--mode blur` on any command above to see the echo visibly transform the stream.
 - `blur` sweeps the radius `0 -> max -> 0` live (driving `/update`); `--blur-period N` sets the seconds per sweep cycle (default 2; larger is slower). `gray`/`invert` are static.
 - `--radius N` sets the initial blur strength, `--max-frames N` stops early.
+
+Stop the stack with `docker compose down`.

@@ -12,6 +12,9 @@ Runs an OpenAI-compatible LLM on the Livepeer network and consumes it with the *
 
 **Requires an NVIDIA GPU** for vLLM. The default model (`Qwen/Qwen2.5-0.5B-Instruct`) is tiny so it fits a modest card can be overridden with `VLLM_MODEL`. Prerequisites (Docker, `uv`, the not-yet-released SDK) and the shared on-chain/payment setup are in the [repo README](../README.md).
 
+> [!NOTE]
+> This app is single-shot by nature but currently registers as **persistent**. It will switch to **single-shot** once [#5](https://github.com/livepeer/live-runner-example-apps/issues/5) lands.
+
 ## How it's wired
 
 vLLM is a **static runner**: the orchestrator reads `runners.json` via `-liveRunnerConfig`, health-polls `http://vllm:8000/health`, and reverse-proxies OpenAI requests straight to vLLM — no registrar, no heartbeat, no SDK in the app, nothing to build.
@@ -22,6 +25,8 @@ Two sides:
 - **Consumer (host):** the local gateway (`gateway.py`) — an OpenAI endpoint on `:8080` that discovers the runner and (on-chain) pays via the signer — plus any OpenAI client (`client.py`, another SDK, `curl`).
 
 The local gateway is a *client-side* component, so it runs on the host like the client, not in the infra compose.
+
+The gateway is the **only** Livepeer-aware piece in the whole path — and it's tiny: three SDK calls, `reserve_session` → `call_runner` → `stop_runner_session` (grep `# Livepeer:` in [gateway.py](gateway.py)). They exist *purely* because an OpenAI client has no idea how to discover a runner or settle Livepeer's payments. Move that glue into the gateway and everything else — `client.py`, any OpenAI SDK, `curl` — stays 100% stock OpenAI, oblivious to Livepeer.
 
 ## Run offchain (free)
 

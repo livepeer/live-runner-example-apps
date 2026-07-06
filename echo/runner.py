@@ -1,4 +1,18 @@
 #!/usr/bin/env python3
+"""echo app: a realtime trickle video service, made live on the Livepeer network.
+
+Receives a live video stream over trickle `in`/`out` channels, optionally
+transforms each frame (gray / invert / blur), and echoes it back.
+
+Livepeer integration (grep `# Livepeer:`):
+  1. register_runner()          — announce the app to the orchestrator (startup)
+  2. create_trickle_channels()  — open the session's trickle in/out channels
+  3. registration.close()       — deregister (cleanup)
+
+Media I/O over trickle uses MediaOutput (read frames) and MediaPublish (write frames).
+/echo and /update are ordinary HTTP handlers; being on the network doesn't change how you write them.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -140,7 +154,7 @@ async def _handle_echo(request: web.Request) -> web.Response:
 
     # Pass the request so the SDK opens channels using the orchestrator's
     # Session-Control header, whose URLs are reachable from the runner's network.
-    channels = await request.app["registration"].create_trickle_channels(
+    channels = await request.app["registration"].create_trickle_channels(  # Livepeer: 2
         request,
         [
             {"name": "in", "mime_type": "video/mp2t"},
@@ -149,7 +163,9 @@ async def _handle_echo(request: web.Request) -> web.Response:
     )
     by_name = {channel["name"]: channel for channel in channels}
     if "in" not in by_name or "out" not in by_name:
-        raise web.HTTPInternalServerError(text="orchestrator did not return in/out channels")
+        raise web.HTTPInternalServerError(
+            text="orchestrator did not return in/out channels"
+        )
 
     # for production apps, handle errors
     mode = _parse_mode(json.loads(await request.read()))
@@ -193,11 +209,13 @@ async def _handle_update(request: web.Request) -> web.Response:
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+    )
     args = _parse_args()
 
     async def _on_startup(app: web.Application) -> None:
-        app["registration"] = await register_runner(
+        app["registration"] = await register_runner(  # Livepeer: 1
             args.orchestrator,
             secret=args.orchSecret,
             runner_url=args.runner_url,
@@ -213,7 +231,7 @@ def main() -> None:
     async def _on_cleanup(app: web.Application) -> None:
         await _close_pipeline()
         with suppress(Exception):
-            await app["registration"].close()
+            await app["registration"].close()  # Livepeer: 3
 
     app = web.Application()
     app.router.add_post("/echo", _handle_echo)

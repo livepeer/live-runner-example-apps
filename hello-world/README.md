@@ -13,11 +13,11 @@ The smallest possible app on the Livepeer network: a synchronous request/respons
 Prerequisites (Docker, `uv`, and the not-yet-released `livepeer-gateway` SDK — pinned in `pyproject.toml`) and the shared on-chain/payment setup live in the [repo README](../README.md).
 
 > [!NOTE]
-> This app currently runs in **persistent** mode. It will switch to **single-shot** once [#4](https://github.com/livepeer/live-runner-example-apps/issues/4) ships.
+> This app currently runs in **persistent** mode. It will switch to **single-shot** once [#5](https://github.com/livepeer/live-runner-example-apps/issues/5) ships.
 
 ## How it's wired
 
-The app self-registers with the orchestrator (`register_runner`) and exposes a single `POST /hello`, reverse-proxied through the orchestrator. The client discovers the app via `/discovery`, reserves a session, calls `/hello`, and releases the session — one request, one response. This is the base flow (discover → reserve → call → release) that every other example builds on.
+The app is **dynamically registered**: it self-registers with the orchestrator via `register_runner` ([runner.py](runner.py)) and exposes a single `POST /hello`, reverse-proxied through the orchestrator. The client calls it with `reserve_session` → `call_runner` → `stop_runner_session` ([client.py](client.py)) — discover, reserve, call, release; one request, one response. Grep `# Livepeer:` in either file to see the exact calls. This is the base flow every other example builds on.
 
 ## Run offchain (free)
 
@@ -29,7 +29,7 @@ uv run client.py --name livepeer --discovery https://localhost:8935/discovery
 docker compose down
 ```
 
-`docker-compose.yml` brings up an orchestrator (`-useLiveRunners`) and the app. The app self-registers, the client discovers it via `/discovery`, reserves a session, calls `POST /hello` through the orchestrator, prints the reply, and releases the session.
+`docker-compose.yml` brings up an orchestrator (`-useLiveRunners`) and the app; the commands above run the client against it.
 
 ## Run on-chain (paid)
 

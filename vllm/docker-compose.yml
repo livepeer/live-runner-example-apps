@@ -48,12 +48,12 @@ services:
           devices:
             - driver: nvidia
               count: 1
-              capabilities: [gpu]
+              capabilities: [ gpu ]
     healthcheck:
       # The orchestrator health-polls vLLM's /health (runners.json); this gates
       # local `depends_on` and mirrors what the orchestrator checks.
-      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      test: [ "CMD", "curl", "-fsS", "http://localhost:8000/health" ]
       interval: 5s
       timeout: 3s
-      retries: 60          # model download + load can take a while
+      retries: 60 # model download + load can take a while
       start_period: 20s

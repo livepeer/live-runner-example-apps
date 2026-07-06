@@ -1,4 +1,16 @@
 #!/usr/bin/env python3
+"""echo client: reserve a session, stream video through the runner, settle up.
+
+Publishes video frames into the runner's trickle `in` channel and reads the
+transformed frames back from `out`. Input/output can be files or stdin/stdout
+pipes, so you can chain `ffmpeg -> client -> ffplay`.
+
+Livepeer integration (grep `# Livepeer:`):
+  1. reserve_session()        — discover the runner, reserve a session
+  2. MediaPublish/MediaOutput — publish frames to `in`, read echoed frames from `out`
+  3. stop_runner_session()    — end the session (settles payment on-chain)
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -28,14 +40,38 @@ log = logging.getLogger("echo-client")
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run the proxied echo Live Runner demo.")
-    parser.add_argument("input", help="input video file, or - to read an MPEG-TS stream from stdin (e.g. piped from ffmpeg)")
+    parser = argparse.ArgumentParser(
+        description="Run the proxied echo Live Runner demo."
+    )
+    parser.add_argument(
+        "input",
+        help="input video file, or - to read an MPEG-TS stream from stdin (e.g. piped from ffmpeg)",
+    )
     parser.add_argument("--discovery", default=DEFAULT_DISCOVERY)
-    parser.add_argument("--output", default=DEFAULT_OUTPUT, help="output file for the echoed stream, or - for stdout (e.g. piped to ffplay)")
+    parser.add_argument(
+        "--output",
+        default=DEFAULT_OUTPUT,
+        help="output file for the echoed stream, or - for stdout (e.g. piped to ffplay)",
+    )
     parser.add_argument("--radius", type=int, default=75)
-    parser.add_argument("--max-frames", type=int, default=0, help="Stop after this many input video frames (0 = full file).")
-    parser.add_argument("--mode", choices=MODES, default="echo", help="Transform the runner applies: echo (passthrough), gray, invert, or blur. blur sweeps the radius; the rest are static.")
-    parser.add_argument("--blur-period", type=float, default=2.0, help="Seconds per blur sweep cycle (0->max->0); only used with --mode blur.")
+    parser.add_argument(
+        "--max-frames",
+        type=int,
+        default=0,
+        help="Stop after this many input video frames (0 = full file).",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=MODES,
+        default="echo",
+        help="Transform the runner applies: echo (passthrough), gray, invert, or blur. blur sweeps the radius; the rest are static.",
+    )
+    parser.add_argument(
+        "--blur-period",
+        type=float,
+        default=2.0,
+        help="Seconds per blur sweep cycle (0->max->0); only used with --mode blur.",
+    )
     return parser.parse_args()
 
 
@@ -61,8 +97,10 @@ async def _publish_video(
     input_ = av.open("pipe:0", format="mpegts") if live else av.open(input_source)
     try:
         if not input_.streams.video:
-            raise LivepeerGatewayError(f"No video stream found in input: {input_source}")
-        publisher = MediaPublish(publish_url)
+            raise LivepeerGatewayError(
+                f"No video stream found in input: {input_source}"
+            )
+        publisher = MediaPublish(publish_url)  # Livepeer: 2 (publish frames)
         prev_pts_time: float | None = None
         prev_wall: float | None = None
         next_update_pts_time: float | None = None
@@ -88,7 +126,10 @@ async def _publish_video(
                     and next_update_pts_time is not None
                     and current_pts_time >= next_update_pts_time
                 ):
-                    await post_json(f"{app_url.rstrip('/')}/update", {"mode": "blur", "radius": blur_radius})
+                    await post_json(
+                        f"{app_url.rstrip('/')}/update",
+                        {"mode": "blur", "radius": blur_radius},
+                    )
                     if blur_radius == MAX_BLUR_RADIUS:
                         blur_direction = -1
                     elif blur_radius == 0:
@@ -99,8 +140,17 @@ async def _publish_video(
                 # Pace files to realtime (live self-paces, so sleep_s=0). sleep(0) still
                 # yields, so async POSTs/reads aren't starved by the blocking decode.
                 sleep_s = 0.0
-                if not live and prev_pts_time is not None and prev_wall is not None and current_pts_time is not None:
-                    sleep_s = max(0.0, (current_pts_time - prev_pts_time) - (time.monotonic() - prev_wall))
+                if (
+                    not live
+                    and prev_pts_time is not None
+                    and prev_wall is not None
+                    and current_pts_time is not None
+                ):
+                    sleep_s = max(
+                        0.0,
+                        (current_pts_time - prev_pts_time)
+                        - (time.monotonic() - prev_wall),
+                    )
 
                 if current_pts_time is not None:
                     prev_pts_time = current_pts_time
@@ -115,7 +165,9 @@ async def _publish_video(
 
 
 async def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+    )
     args = _parse_args()
     output_stdout = args.output.strip() == "-"
     output_path = None if output_stdout else Path(args.output).expanduser()
@@ -129,21 +181,31 @@ async def main() -> None:
     session = None
 
     try:
-        session = await reserve_session(discovery_url=args.discovery, app=APP_ID)
+        session = await reserve_session(
+            discovery_url=args.discovery, app=APP_ID
+        )  # Livepeer: 1
         log.info("session_id=%s app_url=%s", session.session_id, session.app_url)
 
-        echo = await post_json(f"{session.app_url.rstrip('/')}/echo", {"radius": args.radius, "mode": args.mode})
+        echo = await post_json(
+            f"{session.app_url.rstrip('/')}/echo",
+            {"radius": args.radius, "mode": args.mode},
+        )
         in_url = _channel_url(echo, "in")
         out_url = _channel_url(echo, "out")
         log.info("in=%s out=%s", in_url, out_url)
 
-        with nullcontext(sys.stdout.buffer) if output_stdout else output_path.open("wb") as fh:
+        with (
+            nullcontext(sys.stdout.buffer) if output_stdout else output_path.open("wb")
+        ) as fh:
+
             def _write_chunk(chunk: bytes) -> None:
                 fh.write(chunk)
                 if output_stdout:
                     fh.flush()
 
-            async with MediaOutput(out_url, on_bytes=_write_chunk):
+            async with MediaOutput(
+                out_url, on_bytes=_write_chunk
+            ):  # Livepeer: 2 (read echoed frames)
                 await _publish_video(
                     input_source,
                     in_url,
@@ -159,7 +221,7 @@ async def main() -> None:
     finally:
         if session is not None:
             with suppress(Exception):
-                await stop_runner_session(session)
+                await stop_runner_session(session)  # Livepeer: 3
 
 
 if __name__ == "__main__":

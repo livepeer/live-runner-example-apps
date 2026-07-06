@@ -1,38 +1,82 @@
 # Live runner example apps
 
-Example **apps** for the Livepeer network. An app is a container you build and put on the network: a normal HTTP or WebSocket service that exposes your endpoints. Orchestrators host and run your app via the **live runner**, and clients call it through the orchestrator using the [livepeer-gateway](https://github.com/livepeer/livepeer-python-gateway) Python SDK.
+Example **apps** for the Livepeer **live runner** — [go-livepeer](https://github.com/livepeer/go-livepeer)'s new way to run any app on the network. You ship a normal HTTP / WebSocket / video service; an orchestrator hosts it, and clients reach it through the orchestrator with the [livepeer-gateway](https://github.com/livepeer/livepeer-python-gateway) SDK.
 
-Live runners are not on go-livepeer `main` yet and currently live on the `ja/live-runner` branch. Until it merges, both the orchestrator image and the SDK come from that branch.
+The point is to **swap the compute without changing your app — permissionlessly, no lock-in**. Your app stays a plain service with little or no Livepeer-specific code, so you're never tied to us. And the network is permissionless: anyone can run or extend it, no one gatekeeps what you deploy, and no single party can take your app down. Write the app once; **move the compute freely**.
+
+> [!NOTE]
+> Live runners aren't on go-livepeer `main` yet — they live on the [`ja/live-runner`](https://github.com/livepeer/go-livepeer/tree/ja/live-runner) branch. Until it merges, both the orchestrator image and the SDK come from that branch.
+
+## Communication schemas
+
+The orchestrator is a **transparent reverse proxy**: every endpoint you expose is passed through to your app unchanged, so you write an ordinary service and it runs on the network as-is. The transports supported today:
+
+- **HTTP** request/response — the common case. (`hello-world`)
+- **HTTP + SSE** — streamed / token responses. (`vllm`)
+- **Trickle** — continuous realtime video in/out. (`echo`)
+- **WebSocket** — long-lived bidirectional sessions. (external: `scope`)
+
+Need a schema that isn't here? [Open an issue](https://github.com/livepeer/live-runner-example-apps/issues).
 
 > [!IMPORTANT]
-> SSE streaming (used by the [`vllm`](./vllm) example) depends on gateway PR [#25](https://github.com/livepeer/livepeer-python-gateway/pull/25), which is not yet merged. Until it lands, streaming is only available from the SDK's `rs/live-runner-streaming` branch, not `ja/live-runner`.
+> SSE streaming (used by `vllm`) depends on gateway PR [#25](https://github.com/livepeer/livepeer-python-gateway/pull/25), not yet merged. Until it lands, streaming is only on the SDK's [`rs/live-runner-streaming`](https://github.com/livepeer/livepeer-python-gateway/tree/rs/live-runner-streaming) branch, not `ja/live-runner`.
 
 ## Examples
 
-| Example | Runner mode | Registration | Transport |
-| ------- | ----------- | ------------ | --------- |
-| [`hello-world`](./hello-world) | persistent (single-shot by nature) | dynamic | HTTP (JSON request/response) |
-| [`echo`](./echo) | persistent | dynamic | trickle (realtime video) |
-| [`vllm`](./vllm) | persistent (single-shot by nature) | static | HTTP + SSE (OpenAI API, via a local gateway) |
+| Example                        | Goal                                            | Registration | Mode                               | Transport   |
+| ------------------------------ | ----------------------------------------------- | ------------ | ---------------------------------- | ----------- |
+| [`hello-world`](./hello-world) | The simplest app: one request, one response     | dynamic      | persistent (single-shot by nature) | HTTP (JSON) |
+| [`echo`](./echo)               | Realtime video, transformed and echoed back     | dynamic      | persistent                         | trickle     |
+| [`vllm`](./vllm)               | Drop-in OpenAI API; the client stays unmodified | static       | persistent (single-shot by nature) | HTTP + SSE  |
 
-More will follow. Each example is self-contained and runs **offchain** (free, no wallet); most also run **on-chain** (paid). See each README for the commands.
+Start with `hello-world` (the smallest end-to-end path); the others each layer on one new idea. More will follow, including a full example that exercises every feature. Each is self-contained and runs **offchain** (free, no wallet); most also run **on-chain** (paid) — see each README.
 
-## Runner mode: persistent vs single-shot
+## Registration
 
-The runner mode is set at registration and **defaults to `persistent`** — both the SDK's `register_runner(...)` and the static `runners.json`. The examples set it explicitly for clarity.
+How the app attaches to the orchestrator:
 
-- **Persistent** — a held-open session billed per second of wall-clock while it's open. Best for realtime / streaming. (`echo`.)
-- **Single-shot** — one request in, one response out. Best for batch / request-response work. (`hello-world`, `vllm` are single-shot by nature.)
+- **Dynamic** — the app self-registers via the SDK (`register_runner`) and heartbeats; the orchestrator drops it when heartbeats stop. Best for apps that come and go. (`hello-world`, `echo`)
+- **Static** — the orchestrator is configured with the app's URL in a `runners.json` and health-polls it; the app needs no SDK. Best for fixed, long-running deployments. (`vllm`)
+
+## Runner modes
+
+Chosen *at* registration (above); **defaults to `persistent`** — set on both `register_runner(...)` and in `runners.json`. The examples set it explicitly.
+
+- **Persistent** — a held-open session billed per second of wall-clock. Best for realtime / streaming. (`echo`)
+- **Single-shot** — one request in, one response out. Best for batch / request-response. (`hello-world`, `vllm` are single-shot by nature.)
 
 > [!IMPORTANT]
-> Single-shot payment isn't implemented yet ([go-livepeer#3955](https://github.com/livepeer/go-livepeer/issues/3955)), so `hello-world` and `vllm` register as **persistent**. On-chain that bills per second for the whole open session and overbills short calls, so keep them **offchain-only** until #3955 lands ([#5](https://github.com/livepeer/live-runner-example-apps/issues/5)).
+> Single-shot payment isn't implemented yet ([go-livepeer#3955](https://github.com/livepeer/go-livepeer/issues/3955)), so `hello-world` and `vllm` register as **persistent**. On-chain that bills per second for the whole open session and overbills short calls — keep them **offchain-only** until #3955 lands ([#5](https://github.com/livepeer/live-runner-example-apps/issues/5)).
 
-## Registration: dynamic vs static
+## Calling your app
 
-- **Dynamic** — the app self-registers with the orchestrator via the SDK (`register_runner`) and sends heartbeats; the orchestrator drops it when heartbeats stop. Best for apps that come and go. (`hello-world` is dynamic.)
-- **Static** — the orchestrator is configured with the app's URL in a `runners.json` and polls a health endpoint; the app needs no SDK. Best for fixed, long-running deployments.
+The client side is the same shape for every app — **discover → reserve → call → release**:
 
-## Prerequisites
+1. **Discover** the app via the orchestrator's `/discovery`.
+2. **Reserve** a session (`reserve_session`).
+3. **Call** it — one `call_runner`, streamed frames, or a WebSocket, depending on transport.
+4. **Release** the session (`stop_runner_session`), which settles payment on-chain.
+
+Each example's `client.py` shows its exact calls — grep `# Livepeer:` to find them.
+
+> [!NOTE]
+> This is the flow today. Once single-shot lands ([#5](https://github.com/livepeer/live-runner-example-apps/issues/5)), we intend to abstract it into a single call — exact design TBD.
+
+## External examples
+
+Apps that integrate the live runner and live in their own repos — production deployments and standalone examples alike:
+
+| Project                                                                    | What it is                                       | Transport           |
+| -------------------------------------------------------------------------- | ------------------------------------------------ | ------------------- |
+| [daydreamlive/scope](https://github.com/daydreamlive/scope/tree/ja/runner) | Real-time AI video with downloadable LoRA models | WebSocket + trickle |
+
+Built one? [Open a PR](https://github.com/livepeer/live-runner-example-apps/compare) to list it here.
+
+## Running the examples
+
+Each example is self-contained and its README has the run commands. Everything below is the **shared setup** they all build on — the examples spin up a local orchestrator (and, on-chain, a signer) via the compose files here, so you set this up once, not per example.
+
+### Prerequisites
 
 - **Docker** for the end-to-end demos. They use the `livepeer/go-livepeer:ja-live-runner` image, so there is nothing to build.
 - **Python 3.12+** and [`uv`](https://docs.astral.sh/uv/) for the client.
@@ -42,23 +86,26 @@ The runner mode is set at registration and **defaults to `persistent`** — both
   pip install "git+https://github.com/livepeer/livepeer-python-gateway@ja/live-runner"
   ```
 
-## Shared components
+### Shared components
 
-Each example is runnable on its own, but the orchestrator and signer services are defined once at the repo root and pulled into each example with Docker Compose `extends`, so examples don't duplicate them:
+The orchestrator and signer services are defined once at the repo root and pulled into each example with Docker Compose `extends`, so examples don't duplicate them:
 
 - `compose.orchestrator.yml` — the offchain orchestrator (`-useLiveRunners`).
 - `compose.onchain.yml` — adds a remote signer and re-points the orchestrator on-chain.
 
-## On-chain (paid) setup
+### On-chain (paid) setup
 
-On-chain runs add a **remote signer** that holds the payer wallet and mints probabilistic micropayment tickets; the orchestrator (recipient) redeems the winning ones. The setup is shared across examples:
+On-chain runs add a **remote signer** that holds the payer wallet and mints [probabilistic micropayment](https://medium.com/livepeer-blog/a-primer-on-livepeers-probabilistic-micropayments-e16788b29331) tickets; the orchestrator redeems the winning ones. Shared across examples:
 
-- **Wallets live outside this repo.** Point `*_KEYSTORE_DIR` at go-livepeer keystore directories by absolute path; they are mounted read-only. Only the address and password come from `.env`, and the private keys never enter the repo.
-- **`.env` is per example and gitignored.** Copy the example's `.env.example` and fill in the RPC, network, keystore paths, accounts, and pricing. It holds the keystore password, so it is never committed.
-- **Pricing is in USD**, converted to wei on-chain via the price feed. The app advertises `PRICE_PER_UNIT` (whole-number USD) per `PIXELS_PER_UNIT`; keep `PIXELS_PER_UNIT` small, because large values shrink the per-unit price below 1 wei and it floors to 0 (free). The signer accepts up to `MAX_PRICE_PER_UNIT`.
-- **Payments are probabilistic.** A call mints tickets that win with some probability; only winning tickets are redeemed on-chain. With default settings you will rarely see a redemption on a short run — that is expected.
+- **Wallets stay outside the repo** — `*_KEYSTORE_DIR` points at go-livepeer keystores (mounted read-only); only the address + password come from `.env`.
+- **`.env` is per example and gitignored** — copy `.env.example` and fill in RPC, network, keystore paths, accounts, and pricing (it holds the keystore password).
+- **Pricing is USD → wei**: `PRICE_PER_UNIT` (whole USD) per `PIXELS_PER_UNIT`. Keep `PIXELS_PER_UNIT` small — large values floor the per-unit price to 0 (free). Signer caps at `MAX_PRICE_PER_UNIT`.
+- **Payments are probabilistic** — on a short run you'll rarely see a redemption; that's expected.
 
-## Verifying discovery
+> [!NOTE]
+> The `pixels` / `PIXELS_PER_UNIT` naming is legacy (from video transcoding) and is being removed — see [go-livepeer#3942](https://github.com/livepeer/go-livepeer/pull/3942).
+
+### Verifying discovery
 
 Before running a client, confirm the orchestrator actually advertises your runner with the expected price by calling `/discovery` directly:
 
@@ -68,7 +115,7 @@ curl -sk https://localhost:8935/discovery | jq
 
 Each entry lists its `runners` with an `app`, `version`, capacity, and `price_info` (`price_per_unit` / `pixels_per_unit` in WEI). Check that your app appears and that the price matches what you configured — a `price_per_unit` of `0` means it floored to free (see the `PIXELS_PER_UNIT` note above).
 
-## Conventions
+### Conventions
 
 - Apps bind to `127.0.0.1` by default (safe for local runs). In a container the compose files pass `--host=0.0.0.0` so the orchestrator can reach the app.
 - Orchestrators serve a self-signed TLS cert; the SDK skips verification.

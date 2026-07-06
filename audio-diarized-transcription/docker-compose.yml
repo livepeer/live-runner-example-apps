@@ -1,16 +1,38 @@
-# Standalone run for the audio-diarized-transcription-runner. Brings up ONLY the
-# runner (no orchestrator) so you can test the app directly — build + run + call.
-#   docker compose up -d
-#   curl -fsS http://localhost:8080/healthz
-# See README.md for the full test flow. Requires an NVIDIA GPU.
+# Offchain demo: orchestrator + the audio-diarized-transcription-runner, attached
+# as a STATIC runner via runners.json. The orchestrator health-polls /healthz and
+# reverse-proxies the runner's HTTP + WebSocket endpoints. Requires an NVIDIA GPU.
 #
-# The image is built from the runner's own repo (it is not published to a
-# registry yet):
+# Two ways to test (see README.md):
+#   Direct   — client.py hits the runner on :8080, no orchestrator involved.
+#   Session  — session.py reserves ONE session and drives multipart HTTP + WS
+#              through the orchestrator (discovery on :8935).
+#   docker compose up -d
+#
+# The runner image is built from the runner's own repo (not published yet):
 #   git clone https://github.com/moatus/audio-diarized-transcription-runner
 #   cd audio-diarized-transcription-runner && ./build-images.sh build
-# That produces moatus/audio-diarized-transcription-runner:v0.1.0, referenced below.
 
 services:
+  orchestrator:
+    extends:
+      file: ../compose.orchestrator.yml
+      service: orchestrator
+    # `extends` can't append a single flag to `command`, so it's restated here
+    # with -liveRunnerConfig added and runners.json mounted in.
+    command:
+      - -orchestrator
+      - -useLiveRunners
+      - -serviceAddr=127.0.0.1:8935
+      - -httpAddr=0.0.0.0:8935
+      - -liveRunnerAddr=https://orchestrator:8935
+      - -orchSecret=abcdef
+      - -network=offchain
+      - -monitor=false
+      - -liveRunnerConfig=/config/runners.json
+      - -v=6
+    volumes:
+      - ./runners.json:/config/runners.json:ro
+
   audio_diarized_transcription_runner:
     image: ${REGISTRY:-moatus}/audio-diarized-transcription-runner:${TAG:-v0.1.0}
     container_name: example_apps_audio_diarized_transcription
@@ -34,6 +56,8 @@ services:
       # NeMo / Hugging Face / torch caches persist here so weights download once.
       - audio-diarized-transcription-models:/models
       - audio-diarized-transcription-nemo-cache:/root/.cache/torch/NeMo
+    # Published for the direct client.py path; the orchestrator reaches the runner
+    # over the compose network (see runner_url in runners.json), not this port.
     ports:
       - "${RUNNER_PORT:-8080}:8080"
     deploy:

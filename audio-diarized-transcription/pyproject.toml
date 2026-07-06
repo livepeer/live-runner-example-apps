@@ -1,0 +1,15 @@
+[project]
+name = "livepeer-audio-diarized-transcription"
+version = "0.1.0"
+description = "Drive moatus/audio-diarized-transcription-runner through one Livepeer session (HTTP + WebSocket)."
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp",          # session.py: native multipart POST + WS frames over the proxied app_url
+    "livepeer-gateway",
+]
+
+# session.py drives a metered session (reserve_session + start_payments / aclose),
+# which lives on the SDK's session-payments branch — not ja/live-runner yet.
+# (client.py needs none of this; it is standard-library only.)
+[tool.uv.sources]
+livepeer-gateway = { git = "https://github.com/livepeer/livepeer-python-gateway", branch = "rs/live-runner-session-payments" }

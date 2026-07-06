@@ -12,7 +12,10 @@ Speech-to-text with speaker labels, from [moatus/audio-diarized-transcription-ru
 
 **Requires an NVIDIA GPU.** The first request downloads NeMo weights (VAD, TitaNet, ASR) into a Docker volume, so it takes ~1 minute; later requests are fast.
 
-This folder tests the **app directly** — build it, run it, call it. That is the reliable path today (see [Testing through an orchestrator](#testing-through-an-orchestrator) for why the network path needs an SDK change first).
+Two ways to test, both from `docker compose up -d`:
+
+- **Direct** ([§3](#3-test--transcription--diarization-together)) — `client.py` hits the runner on `:8080`, no orchestrator. Standard-library only; the quickest check.
+- **Through the orchestrator** ([below](#testing-through-an-orchestrator)) — `session.py` reserves one Livepeer session and drives both transports over it, the way this runner is meant to run on the network.
 
 ## 1. Build the image
 
@@ -26,7 +29,9 @@ cd audio-diarized-transcription-runner
 
 That is the image `docker-compose.yml` here references (override with `REGISTRY` / `TAG` in `.env`).
 
-## 2. Run the runner
+## 2. Run the stack
+
+Brings up the runner **and** a go-livepeer orchestrator with the runner statically registered (needed only for the orchestrator path in §"Testing through an orchestrator"; the direct test in §3 just uses the runner):
 
 ```sh
 cd audio-diarized-transcription           # this folder
@@ -107,6 +112,34 @@ docker compose down                    # add -v to also drop the model cache vol
 
 ## Testing through an orchestrator
 
-This runner is a passive OpenAI-compatible service with no embedded SDK, so it attaches to a go-livepeer orchestrator via **static** registration — the orchestrator reads `runners.json` (`-liveRunnerConfig`), health-polls `/healthz`, and reverse-proxies requests through. `runners.json` in this folder is ready for that (`app: moatus/audio-diarized-transcription`, capacity 1).
+`docker compose up -d` (above) already brings up a go-livepeer orchestrator with this runner **statically registered** — it reads `runners.json` (`-liveRunnerConfig`), health-polls `/healthz`, and reverse-proxies the runner's HTTP + WebSocket endpoints. Confirm it's advertised:
 
-**Not wired up end-to-end yet**, and it's a client-side gap, not an orchestrator one: the bounded route is a **multipart file upload** (and the streaming route is **binary frames**), but the Python gateway SDK's `call_runner` only sends a JSON `payload` (`livepeer_gateway/http.py` hardcodes `Content-Type: application/json`) and expects a JSON object back. The orchestrator is a transparent reverse proxy and should forward multipart fine — the SDK just needs a non-JSON body path (`files=`/raw `content=`), a relaxed response contract, and body re-send on the 402 retry. Until that lands, test the app directly as above.
+```sh
+curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # "moatus/audio-diarized-transcription"
+```
+
+`session.py` then drives it the way this runner actually wants to be driven — **one persistent session, both transports** (the `streamdiffusion-ws` pattern). It reserves a single session and, over that one proxied `app_url`, sends **native multipart** to the bounded route and (with `--stream`) **binary PCM** to the WebSocket. A background payment pump funds the session per second, decoupled from the request bodies — so there's **no base64, and no `call_runner` JSON limit** in the way.
+
+```sh
+uv sync                                   # installs the SDK's session-payments branch
+uv run session.py sample.wav --num-speakers 2            # bounded, through the orchestrator
+uv run session.py sample.wav --num-speakers 2 --stream    # + WS stream on the same session
+```
+
+Bounded output (verified through the orchestrator):
+
+```
+speakers detected: 2
+speaker-labeled transcript:
+speaker_0: eleven twenty seven fifty seven
+speaker_1: october twenty four nineteen seventy
+```
+
+### Why this, not single-shot `call_runner`
+
+`call_runner` is JSON-only (`livepeer_gateway/http.py` hardcodes `Content-Type: application/json`) — it can't carry a multipart upload or binary frames. But you don't need it: on the session-payments path you drive raw `aiohttp` against `app_url` and the pump pays on a timer. go-livepeer byte-forwards the body, so **native multipart works today with no SDK change** (base64-in-JSON would cost ~33% bloat and break OpenAI compatibility for nothing). Adding multipart to `call_runner` is only a convenience for the single-shot helper.
+
+> [!NOTE]
+> Rides the SDK's `rs/live-runner-session-payments` branch (pinned in `pyproject.toml`), not merged into `ja/live-runner` yet — same situation as the streaming branch.
+>
+> **Status:** the **bounded multipart** call through the orchestrator session is verified end-to-end. The **`--stream`** WS path is verified against the runner directly (`ws://…:8080`, and the runner's own `…_streaming_smoke.py`), but _through the orchestrator_ it currently connects and loads models yet doesn't relay events back for this runner's true-streaming route — a go-livepeer WS-proxy interaction still being chased (`streamdiffusion-ws` proves WS-through-proxy works in general). One caveat regardless of transport: the runner **(re)loads the streaming models per WS connection (~7 s)** and buffers frames meanwhile, so `--settle` holds before `finish` to let them drain.

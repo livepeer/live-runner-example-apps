@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """echo app: a realtime trickle video service, made live on the Livepeer network.
 
-Receives a live video stream over trickle `in`/`out` channels, optionally
-transforms each frame (gray / invert / blur), and echoes it back.
+Receives a live video stream over trickle `in`/`out` channels, optionally transforms
+each frame (gray / invert / blur), and echoes it back.
 
 Livepeer integration (grep `# Livepeer:`):
   1. register_runner()          — announce the app to the orchestrator (startup)
@@ -170,7 +170,7 @@ async def _handle_echo(request: web.Request) -> web.Response:
 
     # for production apps, handle errors
     mode = _parse_mode(json.loads(await request.read()))
-    # internal_url is the runner-reachable channel address (== public url on a shared network).
+    # internal_url: runner-reachable address (same as the public url on a shared net).
     publisher = MediaPublish(by_name["out"]["internal_url"])
 
     async def _on_frame(decoded) -> None:

@@ -67,8 +67,8 @@ def main() -> None:
             secret=args.orchSecret,
             runner_url=args.runner_url,
             app=APP_ID,
-            # single-shot by nature; stays persistent until single-shot
-            # payment lands (go-livepeer#3955)
+            # single-shot by nature; stays persistent until single-shot payment lands
+            # (go-livepeer#3955)
             mode="persistent",
             price_per_unit=args.price,
             pixels_per_unit=args.pixels_per_unit,

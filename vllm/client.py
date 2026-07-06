@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Stock OpenAI client — nothing Livepeer-specific in here.
 
-This is the whole point of the example: ordinary `openai` code with a fixed
-base_url and api_key. It has no idea it's talking to Livepeer. The local gateway
-(gateway.py) sits at base_url and does discovery + payment, so this works
-on-chain unchanged.
+This is the whole point of the example: ordinary `openai` code with a fixed base_url and
+api_key. It has no idea it's talking to Livepeer. The local gateway (gateway.py) sits at
+base_url and does discovery + payment, so this works on-chain unchanged.
 
     docker compose up -d --build          # the network side
     uv run gateway.py &                    # the local gateway on :8080

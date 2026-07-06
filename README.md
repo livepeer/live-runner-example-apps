@@ -28,7 +28,7 @@ flowchart LR
 
 The orchestrator is a **transparent reverse proxy**: every endpoint you expose is passed through to your app unchanged, so you write an ordinary service and it runs on the network as-is. The transports supported today:
 
-- **HTTP** request/response — the common case. (`hello-world`)
+- **HTTP** request/response — the common case. (`hello-world`, `tiles`)
 - **HTTP + SSE** — streamed / token responses. (`vllm`)
 - **Trickle** — continuous realtime video in/out. (`echo`)
 - **WebSocket** — long-lived bidirectional sessions. (external: `scope`)
@@ -40,11 +40,12 @@ Need a schema that isn't here? [Open an issue](https://github.com/livepeer/live-
 
 ## Examples
 
-| Example                        | Goal                                            | Registration | Mode                               | Transport   |
-| ------------------------------ | ----------------------------------------------- | ------------ | ---------------------------------- | ----------- |
-| [`hello-world`](./hello-world) | The simplest app: one request, one response     | dynamic      | persistent (single-shot by nature) | HTTP (JSON) |
-| [`echo`](./echo)               | Realtime video, transformed and echoed back     | dynamic      | persistent                         | trickle     |
-| [`vllm`](./vllm)               | Drop-in OpenAI API; the client stays unmodified | static       | persistent (single-shot by nature) | HTTP + SSE  |
+| Example                        | Goal                                            | Registration | Mode                               | Transport         |
+| ------------------------------ | ----------------------------------------------- | ------------ | ---------------------------------- | ----------------- |
+| [`hello-world`](./hello-world) | The simplest app: one request, one response     | dynamic      | persistent (single-shot by nature) | HTTP (JSON)       |
+| [`tiles`](./tiles)             | Capacity fan-out — one session per tile         | dynamic      | persistent (single-shot by nature) | HTTP (base64 PNG) |
+| [`echo`](./echo)               | Realtime video, transformed and echoed back     | dynamic      | persistent                         | trickle           |
+| [`vllm`](./vllm)               | Drop-in OpenAI API; the client stays unmodified | static       | persistent (single-shot by nature) | HTTP + SSE        |
 
 Start with `hello-world` (the smallest end-to-end path); the others each layer on one new idea. More will follow, including a full example that exercises every feature. Each is self-contained and runs **offchain** (free, no wallet); most also run **on-chain** (paid) — see each README.
 
@@ -77,7 +78,7 @@ Chosen _at_ registration (above); **defaults to `persistent`** — set on both `
 - **Single-shot** — one request in, one response out. Best for batch / request-response. (`hello-world`, `vllm` are single-shot by nature.)
 
 > [!IMPORTANT]
-> Single-shot payment isn't implemented yet ([go-livepeer#3955](https://github.com/livepeer/go-livepeer/issues/3955)), so `hello-world` and `vllm` register as **persistent**. On-chain that bills per second for the whole open session and overbills short calls — keep them **offchain-only** until #3955 lands ([#5](https://github.com/livepeer/live-runner-example-apps/issues/5)).
+> Single-shot payment isn't implemented yet ([go-livepeer#3955](https://github.com/livepeer/go-livepeer/issues/3955)), so the single-shot-by-nature apps above register as **persistent**. On-chain that bills per second for the whole open session and overbills short calls — keep them **offchain-only** until #3955 lands ([#5](https://github.com/livepeer/live-runner-example-apps/issues/5)).
 
 ## Calling your app
 

@@ -1,10 +1,12 @@
-name: Build example images
+name: Build example runner images
 
-# Build each example in the matrix; publish to Docker Hub as
-# livepeer/sample-<example> on main / v* tags / manual dispatch. PRs build only —
-# use workflow_dispatch to pull-test a branch.
-# amd64 only: Livepeer GPU work needs NVIDIA on amd64; no CUDA on arm64/Mac.
-# Add an example: add its folder (with a Dockerfile) to the matrix + paths below.
+# This repo ships EXAMPLE runners: images publish as <namespace>/runner-example-<name>.
+# Production runners drop "example" (runner-<name>).
+#
+# Runs on main / v* tags / manual dispatch; PRs build only (workflow_dispatch to
+# pull-test a branch). amd64 only (Livepeer GPU work is NVIDIA/amd64; no CUDA on
+# arm64/Mac). Add an example: add its folder (with a Dockerfile) to the matrix +
+# paths below.
 on:
   push:
     branches: [main]
@@ -40,9 +42,8 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          # Defaults to the livepeer org; set repo variable DOCKERHUB_NAMESPACE to
-          # publish under your own account (e.g. to test with your own Docker Hub).
-          images: ${{ vars.DOCKERHUB_NAMESPACE || 'livepeer' }}/sample-${{ matrix.example }}
+          # Namespace defaults to livepeer; override via repo variable DOCKERHUB_NAMESPACE.
+          images: ${{ vars.DOCKERHUB_NAMESPACE || 'livepeer' }}/runner-example-${{ matrix.example }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,format=short
@@ -51,8 +52,8 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=stable,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
           labels: |
-            org.opencontainers.image.title=sample-${{ matrix.example }}
-            org.opencontainers.image.description=Livepeer sample app (${{ matrix.example }}) — example, not production-ready
+            org.opencontainers.image.title=runner-example-${{ matrix.example }}
+            org.opencontainers.image.description=Livepeer live-runner example (${{ matrix.example }}) — example, not production-ready
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3

@@ -39,7 +39,7 @@ from livepeer_gateway.live_runner import call_runner, stop_runner_session
 from livepeer_gateway.selection import LiveRunnerSession, reserve_session
 
 DEFAULT_DISCOVERY = "http://localhost:8935/discovery"
-APP_ID = "livepeer-sample/tiles"
+APP_ID = "livepeer-example/tiles"
 DEFAULT_OUTPUT = "tiles-out.png"
 
 log = logging.getLogger("tiles-client")

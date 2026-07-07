@@ -4,7 +4,7 @@ A realtime video app on the Livepeer network: it receives a live video stream ov
 
 |              |                                      |
 | ------------ | ------------------------------------ |
-| App id       | `livepeer-sample/echo`               |
+| App id       | `livepeer-example/echo`              |
 | Runner mode  | persistent (held-open session)       |
 | Registration | dynamic (self-registers via the SDK) |
 | Transport    | trickle (realtime video in/out)      |
@@ -24,7 +24,7 @@ Start the stack and confirm the runner registered:
 
 ```sh
 docker compose up -d --build
-curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # confirm livepeer-sample/echo registered
+curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # confirm livepeer-example/echo registered
 ```
 
 The input is a file path, or `-` to read an MPEG-TS stream from stdin (so you can pipe in anything ffmpeg produces); the output is a file, or `-` to write the echoed stream to stdout (pipe it to a player).

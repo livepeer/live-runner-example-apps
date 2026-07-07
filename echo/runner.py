@@ -220,7 +220,7 @@ def main() -> None:
             args.orchestrator,
             secret=args.orchSecret,
             runner_url=args.runner_url,
-            app="livepeer-sample/echo",
+            app="livepeer-example/echo",
             mode="persistent",  # realtime trickle streaming is a held-open session
         )
         log.info(

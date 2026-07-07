@@ -29,7 +29,7 @@ from livepeer_gateway.live_runner import register_runner
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8989
-APP_ID = "livepeer-sample/tiles"
+APP_ID = "livepeer-example/tiles"
 # Tiles are base64 PNGs in JSON; a photographic tile can exceed aiohttp's 1 MB default.
 MAX_REQUEST_BYTES = 32 * 1024 * 1024
 

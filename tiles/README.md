@@ -4,7 +4,7 @@ An image processor on the Livepeer network that shows what **capacity** does. It
 
 |              |                                      |
 | ------------ | ------------------------------------ |
-| App id       | `livepeer-sample/tiles`              |
+| App id       | `livepeer-example/tiles`             |
 | Runner mode  | persistent (single-shot by nature)   |
 | Registration | dynamic (self-registers via the SDK) |
 | Transport    | HTTP (base64 PNG in/out)             |
@@ -37,7 +37,7 @@ The output image is identical either way. **Capacity changes throughput, not the
 
 ```sh
 CAPACITY=1 docker compose up -d --build
-curl -sk https://localhost:8935/discovery | jq '.[].runners[] | {app, capacity}'    # confirm livepeer-sample/tiles registered with its capacity
+curl -sk https://localhost:8935/discovery | jq '.[].runners[] | {app, capacity}'    # confirm livepeer-example/tiles registered with its capacity
 uv run client.py sample.png --discovery https://localhost:8935/discovery            # note the total time (tiles serialize)
 docker compose down
 

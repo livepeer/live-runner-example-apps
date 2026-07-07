@@ -21,7 +21,7 @@ from livepeer_gateway.live_runner import register_runner
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8989
-APP_ID = "livepeer-sample/hello-world"
+APP_ID = "livepeer-example/hello-world"
 
 log = logging.getLogger("hello-world")
 

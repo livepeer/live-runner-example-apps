@@ -4,7 +4,7 @@ The smallest possible app on the Livepeer network: a synchronous request/respons
 
 |              |                                      |
 | ------------ | ------------------------------------ |
-| App id       | `livepeer-sample/hello-world`        |
+| App id       | `livepeer-example/hello-world`       |
 | Runner mode  | persistent (single-shot by nature)   |
 | Registration | dynamic (self-registers via the SDK) |
 | Transport    | HTTP (JSON request/response)         |
@@ -23,7 +23,7 @@ The app is **dynamically registered**: it self-registers with the orchestrator v
 
 ```sh
 docker compose up -d --build
-curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # confirm livepeer-sample/hello-world registered
+curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # confirm livepeer-example/hello-world registered
 uv run client.py --name livepeer --discovery https://localhost:8935/discovery
 # {'message': 'Hello, livepeer!'}
 docker compose down

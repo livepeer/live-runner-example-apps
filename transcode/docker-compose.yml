@@ -1,0 +1,41 @@
+# Offchain demo: orchestrator + the unified transcoding app (batch + live),
+# self-registering (dynamic) with capacity for concurrent jobs.
+#
+#   docker compose up -d --build
+#   # batch:
+#   uv run client.py clip.mp4 --heights 720,360
+#   # live (trickle):
+#   uv run client.py clip.mp4 --live --heights 720,360
+#
+# The orchestrator is defined once in ../compose.orchestrator.yml (extends).
+# CPU codecs by default; for GPU AV1 set TRANSCODE_AV1_ENCODER=av1_nvenc, use a
+# CUDA ffmpeg base (README), and uncomment the reservation below.
+
+services:
+  orchestrator:
+    extends:
+      file: ../compose.orchestrator.yml
+      service: orchestrator
+
+  app:
+    build: .
+    container_name: example_apps_transcode
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    command:
+      - python
+      - runner.py
+      - --host=0.0.0.0
+      - --orchestrator=https://orchestrator:8935
+      - --orchSecret=abcdef
+      - --runner-url=http://app:8990
+      - --capacity=${TRANSCODE_CAPACITY:-4}
+      - --av1-encoder=${TRANSCODE_AV1_ENCODER:-libsvtav1}
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]

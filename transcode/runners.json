@@ -1,0 +1,12 @@
+{
+  "runners": [
+    {
+      "label": "transcode",
+      "app": "transcode/ffmpeg",
+      "runner_url": "http://app:8990",
+      "health_url": "/healthz",
+      "capacity": 4,
+      "price_info": { "price_per_unit": 1, "pixels_per_unit": 1000, "unit": "USD" }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+[project]
+name = "livepeer-transcode"
+version = "0.1.0"
+description = "Unified batch + live transcoding example app for the Livepeer network."
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp",          # batch client (call_runner) + async I/O
+    "av",               # live client: decode + publish frames over trickle
+    "livepeer-gateway",
+]
+
+# livepeer-gateway isn't on PyPI yet; pull it from the branch.
+[tool.uv.sources]
+# rs/media-publish-encoder-opts adds per-track bitrate + codec-aware encoder
+# options (livepeer-python-gateway#35), so the live path honors bitrate/profile
+# and non-x264 codecs. Falls back to ja/live-runner behavior for everything else.
+livepeer-gateway = { git = "https://github.com/livepeer/livepeer-python-gateway", branch = "rs/media-publish-encoder-opts" }

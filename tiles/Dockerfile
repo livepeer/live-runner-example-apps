@@ -19,4 +19,4 @@ COPY runner.py client.py ./
 
 EXPOSE 8989
 
-CMD ["python", "runner.py"]
+ENTRYPOINT ["python", "runner.py"]

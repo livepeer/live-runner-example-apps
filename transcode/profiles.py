@@ -37,7 +37,8 @@ _H264_PROFILE = {
 }
 
 
-def normalize(raw: dict[str, Any], av1_encoder: str = "libsvtav1") -> dict[str, Any]:
+def normalize(raw: dict[str, Any], av1_encoder: str = "libsvtav1",
+              h264_encoder: str = "libx264", h265_encoder: str = "libx265") -> dict[str, Any]:
     """Validate + fill defaults for one native JsonProfile."""
     width = int(raw.get("width", 0) or 0)
     height = int(raw.get("height", 0) or 0)
@@ -49,6 +50,10 @@ def normalize(raw: dict[str, Any], av1_encoder: str = "libsvtav1") -> dict[str, 
     encoder, ext = _ENCODERS[enc_key]
     if enc_key == "av1":
         encoder = av1_encoder
+    elif enc_key in ("", "h264"):
+        encoder = h264_encoder
+    elif enc_key in ("h265", "hevc"):
+        encoder = h265_encoder
     name = str(raw.get("name") or "") or (f"{height}p" if height else f"{width}w")
     return {
         "name": name,
@@ -83,7 +88,7 @@ def _pix_fmt(color_depth: int, chroma: int) -> str | None:
     return f"yuv{sub}p" + (f"{depth}le" if depth > 8 else "")
 
 
-def video_args(p: dict[str, Any]) -> list[str]:
+def video_args(p: dict[str, Any], gpu_index: int | None = None) -> list[str]:
     """ffmpeg video flags for one normalized profile (scale + codec + rate control + gop)."""
     args: list[str] = []
 
@@ -93,6 +98,8 @@ def video_args(p: dict[str, Any]) -> list[str]:
     args += ["-vf", f"scale={w}:{h}"]
 
     args += ["-c:v", p["encoder"]]
+    if gpu_index is not None and "nvenc" in p["encoder"]:
+        args += ["-gpu", str(gpu_index)]
 
     # H.264/H.265 profile.
     prof = _H264_PROFILE.get(p["profile"].lower(), None)
@@ -105,7 +112,7 @@ def video_args(p: dict[str, Any]) -> list[str]:
                  "-bufsize", str(p["bitrate"] * 2)]
     else:
         crf = p["quality"] or _default_crf(p["encoder_key"])
-        if p["encoder"] == "av1_nvenc":
+        if "nvenc" in p["encoder"]:
             args += ["-cq", str(crf)]
         elif p["encoder_key"] == "av1":
             args += ["-crf", str(crf), "-preset", "8"]  # SVT-AV1 preset (speed/size)

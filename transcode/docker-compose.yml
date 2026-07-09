@@ -8,8 +8,11 @@
 #   uv run client.py clip.mp4 --live --heights 720,360
 #
 # The orchestrator is defined once in ../compose.orchestrator.yml (extends).
-# CPU codecs by default; for GPU AV1 set TRANSCODE_AV1_ENCODER=av1_nvenc, use a
-# CUDA ffmpeg base (README), and uncomment the reservation below.
+# CPU codecs by default; for GPU set TRANSCODE_*_ENCODER=*_nvenc below, use a
+# CUDA ffmpeg base (README), and uncomment the reservation below. Batch jobs
+# round-robin across every GPU the container can see (nvidia-smi -L at
+# startup) via -gpu <index>, so `count: all` puts the whole box to work
+# instead of pinning every job to device 0.
 
 services:
   orchestrator:
@@ -32,10 +35,12 @@ services:
       - --runner-url=http://app:8990
       - --capacity=${TRANSCODE_CAPACITY:-4}
       - --av1-encoder=${TRANSCODE_AV1_ENCODER:-libsvtav1}
+      - --h264-encoder=${TRANSCODE_H264_ENCODER:-libx264}
+      - --h265-encoder=${TRANSCODE_H265_ENCODER:-libx265}
     # deploy:
     #   resources:
     #     reservations:
     #       devices:
     #         - driver: nvidia
-    #           count: 1
+    #           count: all
     #           capabilities: [gpu]

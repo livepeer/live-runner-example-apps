@@ -26,9 +26,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
+import itertools
 import json
 import logging
 import os
+import subprocess
 import tempfile
 from contextlib import suppress
 
@@ -49,6 +51,24 @@ log = logging.getLogger("transcode")
 sessions: dict = {}
 
 
+def _detect_gpu_count() -> int:
+    """Count visible NVIDIA GPUs so batch jobs can round-robin across all of them.
+
+    Without this, every job lands on whatever device index the encoder library
+    picks by default (typically 0), leaving the rest of a multi-GPU box idle.
+    """
+    try:
+        out = subprocess.run(["nvidia-smi", "-L"], check=True, capture_output=True, text=True)
+        n = len([l for l in out.stdout.splitlines() if l.strip()])
+        return n or 1
+    except Exception:
+        return 1
+
+
+GPU_COUNT = _detect_gpu_count()
+_gpu_cycle = itertools.cycle(range(GPU_COUNT))
+
+
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Unified batch + live transcoding Live Runner.")
     p.add_argument("--orchestrator", default="http://localhost:8935")
@@ -57,6 +77,8 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--host", default=DEFAULT_HOST, help="Bind address (use 0.0.0.0 in containers).")
     p.add_argument("--capacity", type=int, default=4, help="Max concurrent jobs.")
     p.add_argument("--av1-encoder", default="libsvtav1", help="Encoder for encoder=AV1 (libsvtav1 cpu, av1_nvenc gpu).")
+    p.add_argument("--h264-encoder", default="libx264", help="Encoder for encoder=H264/default (libx264 cpu, h264_nvenc gpu).")
+    p.add_argument("--h265-encoder", default="libx265", help="Encoder for encoder=H265/HEVC (libx265 cpu, hevc_nvenc gpu).")
     p.add_argument("--price", type=int, default=0, help="Price in USD per pixels-per-unit (0 = free).")
     p.add_argument("--pixels-per-unit", type=int, default=1, help="Scale factor for the price.")
     p.add_argument("--no-register", action="store_true",
@@ -76,16 +98,10 @@ async def _download(url: str, dst: str) -> None:
 
 
 async def _upload(url: str, src: str) -> None:
-    def _reader():
-        with open(src, "rb") as f:
-            while True:
-                b = f.read(1 << 20)
-                if not b:
-                    break
-                yield b
     async with ClientSession(timeout=ClientTimeout(total=None, sock_connect=30)) as s:
-        async with s.put(url, data=_reader()) as r:
-            r.raise_for_status()
+        with open(src, "rb") as f:
+            async with s.put(url, data=f) as r:
+                r.raise_for_status()
 
 
 async def _handle_batch(request: web.Request) -> web.Response:
@@ -109,9 +125,12 @@ async def _handle_batch(request: web.Request) -> web.Response:
 
         out_dir = os.path.join(d, "out")
         os.makedirs(out_dir, exist_ok=True)
+        gpu_index = next(_gpu_cycle)
+        log.info("batch: transcoding on gpu %d/%d", gpu_index, GPU_COUNT)
         try:
             renditions = await asyncio.to_thread(
-                engine.transcode_file, src, raw_profiles, out_dir, request.app["av1_encoder"]
+                engine.transcode_file, src, raw_profiles, out_dir,
+                request.app["av1_encoder"], request.app["h264_encoder"], request.app["h265_encoder"], gpu_index,
             )
         except (RuntimeError, ValueError) as exc:
             return web.json_response({"error": str(exc)}, status=400)
@@ -254,6 +273,8 @@ def main() -> None:
     app = web.Application(client_max_size=1024 * 1024 * 1024)  # 1 GiB (base64 test clips)
     app["args"] = args
     app["av1_encoder"] = args.av1_encoder
+    app["h264_encoder"] = args.h264_encoder
+    app["h265_encoder"] = args.h265_encoder
     app.router.add_get("/healthz", _handle_health)
     app.router.add_post("/transcode", _handle_batch)
     app.router.add_post("/transcode/live", _handle_live)

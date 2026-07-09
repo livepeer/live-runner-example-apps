@@ -13,7 +13,8 @@ import profiles as prof
 
 
 def transcode_file(input_path: str, raw_profiles: list[dict], out_dir: str,
-                   av1_encoder: str = "libsvtav1") -> list[dict]:
+                   av1_encoder: str = "libsvtav1", h264_encoder: str = "libx264",
+                   h265_encoder: str = "libx265", gpu_index: int | None = None) -> list[dict]:
     """Transcode `input_path` into one file per profile under `out_dir`.
 
     Returns a rendition list: [{name, path, width, height, encoder, bytes}, ...].
@@ -25,10 +26,10 @@ def transcode_file(input_path: str, raw_profiles: list[dict], out_dir: str,
     # would decode once and fan out (ffmpeg split filter) to save the repeat decode.
     renditions: list[dict] = []
     for raw in raw_profiles:
-        p = prof.normalize(raw, av1_encoder=av1_encoder)
+        p = prof.normalize(raw, av1_encoder=av1_encoder, h264_encoder=h264_encoder, h265_encoder=h265_encoder)
         out_path = os.path.join(out_dir, f"{p['name']}.{p['ext']}")
         cmd = ["ffmpeg", "-y", "-i", input_path]
-        cmd += prof.video_args(p)
+        cmd += prof.video_args(p, gpu_index=gpu_index)
         cmd += prof.audio_args(p["ext"])
         if p["ext"] == "mp4":
             cmd += ["-movflags", "+faststart"]

@@ -66,7 +66,8 @@ uv run client.py clip.mp4 --live --heights 720,360   # writes out-<name>.ts
 
 ## Notes
 
-- **AV1** is just `encoder: "AV1"` → `libsvtav1` (CPU) or `av1_nvenc` (GPU via `TRANSCODE_AV1_ENCODER` + a CUDA base). Test on an AV1 GPU later; H.264 is the default and needs no GPU.
+- **AV1** is just `encoder: "AV1"` → `libsvtav1` (CPU) or `av1_nvenc` (GPU via `TRANSCODE_AV1_ENCODER` + a CUDA base). H.264/H.265 have the same override (`TRANSCODE_H264_ENCODER`/`TRANSCODE_H265_ENCODER` → `h264_nvenc`/`hevc_nvenc`); H.264 CPU (`libx264`) remains the default and needs no GPU. VP8/VP9 stay CPU-only — ffmpeg has no GPU encoder for either.
+- **Multi-GPU**: batch jobs round-robin across every GPU the container can see (`nvidia-smi -L` at startup, `-gpu <index>` passed to any `*_nvenc` encoder) — `count: all` in the GPU reservation puts the whole box to work instead of pinning every job to device 0.
 - **Batch honors the full profile** (bitrate, profile, gop, pix fmt). **Live honors `height`/`fps`/`encoder`/`bitrate`/`profile`** via the SDK's per-track encoder-options support ([livepeer-python-gateway#35](https://github.com/livepeer/livepeer-python-gateway/pull/35), pinned in `pyproject.toml`/`Dockerfile`); only `gop` is still segment-driven on live.
 - The 54 TB AV1 archival job is the **batch** surface with `input_url`/`output_urls` + a fan-out driver over the clip list.
 

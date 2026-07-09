@@ -173,7 +173,9 @@ async def _handle_live(request: web.Request) -> web.Response:
 
     payload = json.loads(await request.read() or "{}")
     raw = payload.get("profiles") or [{"height": 360}]
-    profs = [prof.normalize(p, av1_encoder=request.app["av1_encoder"]) for p in raw]
+    profs = [prof.normalize(p, av1_encoder=request.app["av1_encoder"],
+                             h264_encoder=request.app["h264_encoder"],
+                             h265_encoder=request.app["h265_encoder"]) for p in raw]
 
     reqs = [{"name": "in", "mime_type": "video/mp2t"}]
     reqs += [{"name": p["name"], "mime_type": "video/mp2t"} for p in profs]

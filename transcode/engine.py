@@ -28,7 +28,12 @@ def transcode_file(input_path: str, raw_profiles: list[dict], out_dir: str,
     for raw in raw_profiles:
         p = prof.normalize(raw, av1_encoder=av1_encoder, h264_encoder=h264_encoder, h265_encoder=h265_encoder)
         out_path = os.path.join(out_dir, f"{p['name']}.{p['ext']}")
-        cmd = ["ffmpeg", "-y", "-i", input_path]
+        cmd = ["ffmpeg", "-y"]
+        if "nvenc" in p["encoder"]:
+            cmd += ["-hwaccel", "cuda"]
+            if gpu_index is not None:
+                cmd += ["-hwaccel_device", str(gpu_index)]
+        cmd += ["-i", input_path]
         cmd += prof.video_args(p, gpu_index=gpu_index)
         cmd += prof.audio_args(p["ext"])
         if p["ext"] == "mp4":

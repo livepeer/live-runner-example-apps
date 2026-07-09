@@ -22,8 +22,6 @@ services:
       orchestrator:
         condition: service_healthy
     command:
-      - python
-      - runner.py
       - --host=0.0.0.0
       - --orchestrator=https://orchestrator:8935
       - --orchSecret=abcdef

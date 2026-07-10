@@ -1,0 +1,13 @@
+[project]
+name = "livepeer-vllm-realtime"
+version = "0.1.0"
+description = "Realtime speech transcription example app for the Livepeer network."
+requires-python = ">=3.12"
+dependencies = [
+    "livepeer-gateway",
+    "websockets",
+]
+
+# livepeer-gateway is not on PyPI yet; pull it from the branch (Trickle lives here).
+[tool.uv.sources]
+livepeer-gateway = { git = "https://github.com/livepeer/livepeer-python-gateway", branch = "ja/live-runner" }

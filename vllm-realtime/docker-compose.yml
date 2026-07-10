@@ -1,0 +1,77 @@
+# End-to-end offchain demo: orchestrator + the vllm-realtime app.
+#
+# The orchestrator is defined once in ../compose.orchestrator.yml and pulled in
+# with `extends`; this file adds the app and (optionally) a vLLM server.
+#
+# Default run is GPU-FREE: the app uses the mock transcriber, so only the
+# orchestrator + app start. The real vLLM server is gated behind the `vllm`
+# profile because it needs an NVIDIA GPU.
+#
+#   # mock (no GPU, e.g. a laptop):
+#   docker compose up -d --build
+#   uv run client.py --discovery https://localhost:8935/discovery
+#
+#   # real transcription (GPU box):
+#   TRANSCRIBER=vllm docker compose --profile vllm up -d --build
+
+services:
+  orchestrator:
+    extends:
+      file: ../compose.orchestrator.yml
+      service: orchestrator
+
+  app:
+    build: .
+    container_name: example_apps_vllm_realtime_app
+    # Wait for the orchestrator's healthcheck so registration doesn't race its boot.
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    environment:
+      # mock (default, GPU-free) | vllm (needs the `vllm` profile + a GPU)
+      - TRANSCRIBER=${TRANSCRIBER:-mock}
+      - VLLM_REALTIME_URL=ws://vllm:8000/v1/realtime
+      - VLLM_REALTIME_MODEL=${VLLM_REALTIME_MODEL:-mistralai/Voxtral-Mini-4B-Realtime-2602}
+    command:
+      - --host=0.0.0.0
+      - --orchestrator=https://orchestrator:8935
+      - --orchSecret=abcdef
+      - --runner-url=http://app:5000
+
+  vllm:
+    # Real realtime transcription server. Started only with `--profile vllm`.
+    image: vllm/vllm-openai:latest
+    container_name: example_apps_vllm_realtime
+    profiles: ["vllm"]
+    command:
+      - "--model"
+      - "${VLLM_REALTIME_MODEL:-mistralai/Voxtral-Mini-4B-Realtime-2602}"
+      - "--port"
+      - "8000"
+      # Launch flags validated on an RTX 4090 (24 GB). The model's native 131k
+      # context needs a ~4 GiB KV cache that does not fit next to the weights
+      # on a 24 GB card — cap the context or the engine refuses to start.
+      # 16k tokens is far more than a realtime transcription session needs.
+      - "--max-model-len"
+      - "${VLLM_MAX_MODEL_LEN:-16384}"
+      - "--compilation_config"
+      - '{"cudagraph_mode": "PIECEWISE"}'
+      - "--gpu-memory-utilization"
+      - "${VLLM_GPU_MEM_UTIL:-0.9}"
+    environment:
+      # Voxtral is gated on HuggingFace; a token is required for real runs.
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN:-}
+      - VLLM_DISABLE_COMPILE_CACHE=1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 60          # model download + load can take a while
+      start_period: 20s

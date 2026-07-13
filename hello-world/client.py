@@ -19,7 +19,7 @@ from livepeer_gateway.errors import LivepeerGatewayError
 from livepeer_gateway.live_runner import call_runner, stop_runner_session
 from livepeer_gateway.selection import reserve_session
 
-DEFAULT_DISCOVERY = "http://localhost:8935/discovery"
+DEFAULT_DISCOVERY = "https://localhost:8935/discovery"
 APP_ID = "livepeer-example/hello-world"
 
 log = logging.getLogger("hello-world-client")

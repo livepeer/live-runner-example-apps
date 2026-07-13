@@ -53,7 +53,7 @@ Start an orchestrator built from `ja/live-runner` (see [Build from source](https
 
 ```sh
 ./livepeer -orchestrator -useLiveRunners -serviceAddr localhost:8935 -orchSecret abcdef -v 6
-uv run runner.py --orchestrator http://localhost:8935 --orchSecret abcdef
+uv run runner.py --orchestrator https://localhost:8935 --orchSecret abcdef
 uv run client.py --name livepeer
 # {'message': 'Hello, livepeer!'}
 ```

@@ -33,7 +33,7 @@ The gateway is the **only** Livepeer-aware piece in the whole path — and it's 
 ```sh
 docker compose up -d                   # pulls the vLLM + orchestrator images (slow first time)
 curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # confirm vllm/qwen2.5-0.5b-instruct registered
-uv run gateway.py &                    # OpenAI endpoint on http://localhost:8080/v1
+uv run gateway.py --discovery https://localhost:8935/discovery &   # OpenAI endpoint on http://localhost:8080/v1
 uv run client.py --prompt "In one sentence, what is Livepeer?"
 kill %1; docker compose down           # stop the gateway, then the stack
 ```
@@ -71,7 +71,7 @@ Layer `docker-compose.onchain.yml` to add a remote signer and run the orchestrat
 ```sh
 cp .env.example .env   # fill in RPC, network, keystore paths, accounts
 docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d
-uv run gateway.py --signer http://localhost:7936 &     # gateway pays per request
+uv run gateway.py --signer http://localhost:7936 --discovery https://localhost:8935/discovery &   # gateway pays per request
 uv run client.py --prompt "In one sentence, what is Livepeer?"
 kill %1; docker compose -f docker-compose.yml -f docker-compose.onchain.yml down
 ```

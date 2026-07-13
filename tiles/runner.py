@@ -40,7 +40,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Live Runner tiles app demo (capacity showcase)."
     )
-    parser.add_argument("--orchestrator", default="http://localhost:8935")
+    parser.add_argument("--orchestrator", default="https://localhost:8935")
     parser.add_argument("--orchSecret", default="abcdef")
     parser.add_argument("--runner-url", default=f"http://{DEFAULT_HOST}:{DEFAULT_PORT}")
     parser.add_argument(

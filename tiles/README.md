@@ -69,6 +69,6 @@ Start an orchestrator built from `ja/live-runner` (see [Build from source](https
 
 ```sh
 ./livepeer -orchestrator -useLiveRunners -serviceAddr localhost:8935 -orchSecret abcdef -v 6
-uv run runner.py --orchestrator http://localhost:8935 --orchSecret abcdef --capacity 9
+uv run runner.py --orchestrator https://localhost:8935 --orchSecret abcdef --capacity 9
 uv run client.py sample.png
 ```

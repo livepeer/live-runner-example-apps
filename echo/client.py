@@ -30,7 +30,7 @@ from livepeer_gateway.media_publish import MediaPublish
 from livepeer_gateway.http import post_json
 from livepeer_gateway.selection import reserve_session
 
-DEFAULT_DISCOVERY = "http://localhost:8935/discovery"
+DEFAULT_DISCOVERY = "https://localhost:8935/discovery"
 APP_ID = "livepeer-example/echo"
 DEFAULT_OUTPUT = "echo-out.ts"
 MAX_BLUR_RADIUS = 100

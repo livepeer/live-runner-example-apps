@@ -13,7 +13,7 @@
 
 services:
   signer:
-    image: livepeer/go-livepeer:ja-live-runner
+    image: livepeer/go-livepeer:single-shot
     container_name: example_apps_signer
     command:
       - -remoteSigner

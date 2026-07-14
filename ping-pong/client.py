@@ -30,7 +30,7 @@ from urllib.parse import urlsplit
 
 import aiohttp
 
-from livepeer_gateway.errors import LivepeerGatewayError
+from livepeer_gateway.errors import LivepeerGatewayError, SkipPaymentCycle
 from livepeer_gateway.selection import runner_selector
 
 DEFAULT_DISCOVERY = "https://localhost:8935/discovery"
@@ -112,7 +112,13 @@ async def _payment_streamer(session, payer, interval_s, pay_url):
     period = max(0.5, interval_s * 0.5)
     async with aiohttp.ClientSession() as http:
         while True:
-            payment = await session.get_payment()
+            try:
+                payment = await session.get_payment()
+            except SkipPaymentCycle:
+                # 482: balance is current, nothing to mint this cycle. Keep looping.
+                log.debug("payment skip cycle (balance current)")
+                await asyncio.sleep(period)
+                continue
             headers = {
                 "Livepeer-Payer-Address": payer,
                 "Livepeer-Payment": payment.payment,

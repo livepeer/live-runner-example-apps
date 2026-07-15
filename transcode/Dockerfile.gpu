@@ -1,0 +1,19 @@
+# NVIDIA NVENC build of the transcode app: CUDA runtime base + Ubuntu ffmpeg with
+# av1_nvenc/h264_nvenc/hevc_nvenc built in. Requires the nvidia container runtime
+# (--gpus all) at run time; set --h264/h265/av1-encoder to the *_nvenc variants.
+FROM nvidia/cuda:12.6.3-runtime-ubuntu24.04
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ffmpeg python3 python3-pip python-is-python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir --break-system-packages \
+    "av" \
+    "livepeer-gateway @ git+https://github.com/livepeer/livepeer-python-gateway@rs/media-publish-encoder-opts"
+
+WORKDIR /app
+COPY runner.py profiles.py engine.py ./
+
+EXPOSE 8990
+
+CMD ["python3", "runner.py"]

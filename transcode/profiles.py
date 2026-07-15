@@ -23,7 +23,7 @@ _ENCODERS = {
     "hevc": ("libx265", "mp4"),
     "vp8": ("libvpx", "webm"),
     "vp9": ("libvpx-vp9", "webm"),
-    "av1": ("libsvtav1", "mkv"),  # GPU: override encoder=av1_nvenc via --av1-encoder
+    "av1": ("libsvtav1", "mkv"),  # GPU: override encoder=av1_nvenc/av1_vaapi via --av1-encoder
 }
 
 # native H.264 profile name -> ffmpeg -profile:v value.
@@ -88,14 +88,27 @@ def _pix_fmt(color_depth: int, chroma: int) -> str | None:
     return f"yuv{sub}p" + (f"{depth}le" if depth > 8 else "")
 
 
-def video_args(p: dict[str, Any], gpu_index: int | None = None) -> list[str]:
-    """ffmpeg video flags for one normalized profile (scale + codec + rate control + gop)."""
+def video_args(p: dict[str, Any], gpu_index: int | None = None,
+               hw_decode: bool = False) -> list[str]:
+    """ffmpeg video flags for one normalized profile (scale + codec + rate control + gop).
+
+    hw_decode: VA-API only — when the input was hwaccel-decoded to a VA surface,
+    scale on the GPU (scale_vaapi) instead of the sw scale + upload.
+    """
     args: list[str] = []
 
     # resolution — 0 on either axis keeps aspect (-2 = even, preserve aspect).
     w = p["width"] or -2
     h = p["height"] or -2
-    args += ["-vf", f"scale={w}:{h}"]
+    if "vaapi" in p["encoder"] and hw_decode:
+        # frames are already VA surfaces (hwaccel decode): scale on the GPU.
+        # scale_vaapi wants concrete/-1 dims, so map the 0/-2 "keep aspect" to -1.
+        args += ["-vf", f"scale_vaapi=w={p['width'] or -1}:h={p['height'] or -1}"]
+    elif "vaapi" in p["encoder"]:
+        # sw scale, then upload nv12 to a VA surface for GPU encode.
+        args += ["-vf", f"scale={w}:{h},format=nv12,hwupload"]
+    else:
+        args += ["-vf", f"scale={w}:{h}"]
 
     args += ["-c:v", p["encoder"]]
     if gpu_index is not None and "nvenc" in p["encoder"]:
@@ -114,6 +127,8 @@ def video_args(p: dict[str, Any], gpu_index: int | None = None) -> list[str]:
         crf = p["quality"] or _default_crf(p["encoder_key"])
         if "nvenc" in p["encoder"]:
             args += ["-cq", str(crf)]
+        elif "vaapi" in p["encoder"]:
+            args += ["-rc_mode", "CQP", "-qp", str(crf)]  # VA-API constant-quality
         elif p["encoder_key"] == "av1":
             args += ["-crf", str(crf), "-preset", "8"]  # SVT-AV1 preset (speed/size)
         elif p["encoder_key"] in ("vp8", "vp9"):
@@ -136,8 +151,15 @@ def video_args(p: dict[str, Any], gpu_index: int | None = None) -> list[str]:
         except ValueError:
             pass
 
-    pix = _pix_fmt(p["colorDepth"], p["chromaFormat"])
-    if pix:
+    chroma = p["chromaFormat"]
+    if ("nvenc" in p["encoder"] or "vaapi" in p["encoder"]) and chroma != 0:
+        # NVENC/VA-API (h264/hevc/av1) on this fleet don't support 4:2:2/4:4:4
+        # chroma; clamp to 4:2:0, keep requested bit depth.
+        chroma = 0
+    pix = _pix_fmt(p["colorDepth"], chroma)
+    if pix and "vaapi" not in p["encoder"]:
+        # VA-API pins its pixel format via the VA surface (nv12); a second
+        # -pix_fmt would clash with the encoder's surface input.
         args += ["-pix_fmt", pix]
 
     return args

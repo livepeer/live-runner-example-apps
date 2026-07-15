@@ -1,0 +1,35 @@
+# Intel VA-API build of the transcode app: jellyfin-ffmpeg7 ships the patched
+# Intel media stack (iHD + oneVPL) that makes scale_vaapi + av1_vaapi work on Arc,
+# where distro ffmpeg's are broken. Full-GPU (decode + scale + encode) via
+# --device /dev/dri; set --h264/h265/av1-encoder to the *_vaapi variants (see
+# docker-compose.intel.yml).
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        curl ca-certificates gnupg git python3 python3-pip python-is-python3 \
+    && curl -fsSL https://repo.jellyfin.org/jellyfin_team.gpg.key \
+        | gpg --dearmor -o /usr/share/keyrings/jellyfin.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/jellyfin.gpg] https://repo.jellyfin.org/ubuntu noble main" \
+        > /etc/apt/sources.list.d/jellyfin.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends jellyfin-ffmpeg7 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir --break-system-packages \
+    "av" \
+    "livepeer-gateway @ git+https://github.com/livepeer/livepeer-python-gateway@rs/media-publish-encoder-opts"
+
+# Point the engine at the jellyfin ffmpeg (patched Intel stack) and default to the
+# full-GPU path (decode + scale + encode on the GPU).
+ENV FFMPEG_BIN=/usr/lib/jellyfin-ffmpeg/ffmpeg \
+    HWACCEL_DECODE=1
+
+WORKDIR /app
+COPY runner.py profiles.py engine.py ./
+
+EXPOSE 8990
+
+CMD ["python3", "runner.py"]

@@ -39,7 +39,7 @@ import engine
 import profiles as prof
 from aiohttp import ClientSession, ClientTimeout, web
 
-from livepeer_gateway.live_runner import create_trickle_channels, register_runner
+from livepeer_gateway.live_runner import LiveRunnerGPU, create_trickle_channels, register_runner
 from livepeer_gateway.media_output import MediaOutput
 from livepeer_gateway.media_publish import MediaPublish, MediaPublishConfig, VideoOutputConfig
 
@@ -76,9 +76,9 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--runner-url", default=f"http://{DEFAULT_HOST}:{DEFAULT_PORT}")
     p.add_argument("--host", default=DEFAULT_HOST, help="Bind address (use 0.0.0.0 in containers).")
     p.add_argument("--capacity", type=int, default=4, help="Max concurrent jobs.")
-    p.add_argument("--av1-encoder", default="libsvtav1", help="Encoder for encoder=AV1 (libsvtav1 cpu, av1_nvenc gpu).")
-    p.add_argument("--h264-encoder", default="libx264", help="Encoder for encoder=H264/default (libx264 cpu, h264_nvenc gpu).")
-    p.add_argument("--h265-encoder", default="libx265", help="Encoder for encoder=H265/HEVC (libx265 cpu, hevc_nvenc gpu).")
+    p.add_argument("--av1-encoder", default="libsvtav1", help="Encoder for encoder=AV1 (libsvtav1 cpu, av1_nvenc/av1_vaapi gpu).")
+    p.add_argument("--h264-encoder", default="libx264", help="Encoder for encoder=H264/default (libx264 cpu, h264_nvenc/h264_vaapi gpu).")
+    p.add_argument("--h265-encoder", default="libx265", help="Encoder for encoder=H265/HEVC (libx265 cpu, hevc_nvenc/hevc_vaapi gpu).")
     p.add_argument("--price", type=int, default=0, help="Price in USD per pixels-per-unit (0 = free).")
     p.add_argument("--pixels-per-unit", type=int, default=1, help="Scale factor for the price.")
     p.add_argument("--no-register", action="store_true",
@@ -259,9 +259,20 @@ def main() -> None:
         if args.no_register:
             log.info("static mode: not self-registering; attach via runners.json (health_url=/healthz)")
             return
+        # register_runner auto-detects only NVIDIA GPUs (pynvml/torch/nvidia-smi),
+        # so a non-NVIDIA GPU (e.g. Intel Arc on the VA-API path) is advertised to
+        # discovery via env instead — otherwise the runner shows with no GPU.
+        gpu = None
+        if os.environ.get("RUNNER_GPU_NAME"):
+            gpu = LiveRunnerGPU(
+                id=os.environ.get("RUNNER_GPU_ID", ""),
+                name=os.environ["RUNNER_GPU_NAME"],
+                vram_mb=int(os.environ.get("RUNNER_GPU_VRAM_MB", "0") or 0),
+            )
         app["registration"] = await register_runner(
             args.orchestrator, secret=args.orchSecret, runner_url=args.runner_url, app=APP_ID,
             capacity=args.capacity, price_per_unit=args.price, pixels_per_unit=args.pixels_per_unit,
+            gpu=gpu, auto_detect_gpu=(gpu is None),
         )
         log.info("registered runner_id=%s app=%s capacity=%d", app["registration"].runner_id, APP_ID, args.capacity)
 

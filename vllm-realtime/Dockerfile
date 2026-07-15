@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir \
     websockets
 
 WORKDIR /app
-COPY runner.py transcriber.py client.py ./
+COPY runner.py transcriber.py stats.py client.py ./
 
 EXPOSE 5000
 

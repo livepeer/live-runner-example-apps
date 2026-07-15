@@ -65,6 +65,26 @@ was confusing, and the open questions a second builder would hit.
    install the `+cu129` wheel from GitHub releases instead, and
    `mistral-common[soundfile]` is required at runtime for audio decode.
 
+8. **The SDK meters Trickle, but nothing meters a WebSocket.** `get_stats()` on
+   `TrickleSubscriber` / `TricklePublisher` / `MediaOutput` gives transport and
+   frame counters for free, so a Trickle-in/Trickle-out app is observable without
+   writing any code. An app whose *output* is a WebSocket gets none of it and has
+   to hand-roll the whole half (here: `stats.py`). Two things make that sharper
+   than it first looks. First, the frame counters everyone points you at
+   (`MediaOutputStats.audio_frames_decoded`) only exist if you go through the AV
+   decode path — this example publishes raw PCM16, so there is no decoder and no
+   frame count, and audio duration has to be derived from byte totals instead.
+   Second, there is no suggested shape for app-authored stats, so every WS app
+   will invent its own field names for the same quantities.
+9. **Realtime pacing makes a real-time factor structurally meaningless.** Wall
+   clock can't drop below the audio duration when the client paces to real time,
+   so RTF is pinned just above 1.0 regardless of backend speed — it answers "did
+   the pipeline keep up?", not "how fast is the model?". The obvious workaround
+   (publish unpaced) collides with #2: the stream is deleted before the subscriber
+   drains it, so an unpaced run silently transcribes ~1 segment of audio and
+   reports confident nonsense. There is currently no way to measure true
+   throughput end-to-end through Trickle without racing the deletion.
+
 ## Suggestions
 
 - Add a "transports" page: HTTP / SSE / **Trickle** with a one-paragraph "when to
@@ -73,6 +93,9 @@ was confusing, and the open questions a second builder would hit.
 - Document the trickle channel mime-type contract (validated vs opaque).
 - Document the streaming payment model (one-shot vs per-segment) end to end.
 - Consider splitting the `av` import so Trickle-only apps don't need PyAV.
+- Ship a `WebSocketStats` counter helper next to the Trickle ones, so apps that
+  stream results over a WebSocket report the same shape instead of each inventing
+  one (see #8).
 
 ## Environment
 
@@ -82,3 +105,9 @@ was confusing, and the open questions a second builder would hit.
   570.x/CUDA 12.8). Live speech was transcribed with word-by-word deltas
   streaming over the orchestrator-proxied WebSocket while audio was still
   being published.
+- Measured on that setup, 6.56 s of speech published at realtime pace: time to
+  first word 2.4 s (inflated by lead-in silence in the clip), finalize tail
+  0.38 s, real-time factor 1.12x, 28 deltas / 15 words, and zero Trickle
+  sequence gaps, retries or failures across 14 segments. The finalize tail is
+  the stable figure — it reproduced within ~10 ms across runs, while first-word
+  moves with whatever silence precedes speech.

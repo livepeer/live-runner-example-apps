@@ -9,7 +9,8 @@ Flow
 4. Optionally send {"type": "session.update", "session": {...}} mid-stream
    to adjust settings (language etc.) without stopping the stream
 5. Publish PCM16/16 kHz audio to the Trickle in channel, paced to real time
-6. Drain transcript events from the WebSocket until "done"
+6. Drain transcript events from the WebSocket until "done", then print the
+   "stats" event the runner sends last (see stats.py)
 7. Release the session
 
 Pass --signer <url> for the on-chain (paid) path.
@@ -60,7 +61,10 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--no-realtime", action="store_true",
-        help="Publish as fast as possible instead of pacing to wall clock.",
+        help="Publish as fast as possible instead of pacing to wall clock. "
+             "Trickle deletes unread segments when the publisher closes, so an "
+             "unpaced run drops most of its audio — smoke tests only, never "
+             "measurement (see FEEDBACK.md).",
     )
     parser.add_argument(
         "--language", default="",
@@ -108,6 +112,39 @@ def _make_ssl_ctx() -> ssl.SSLContext:
     return ctx
 
 
+def _print_stats(data: dict) -> None:
+    """Render the runner's final stats event."""
+    t = data.get("transcription") or {}
+    w = data.get("websocket") or {}
+    k = data.get("trickle") or {}
+
+    print("\n──── performance ────")
+    print(f"  audio                {t.get('audio_seconds')} s")
+    print(f"  wall clock           {t.get('wall_seconds')} s")
+    print(f"  real-time factor     {t.get('realtime_factor')}x")
+    print(f"  time to first word   {t.get('time_to_first_word_s')} s")
+    print(f"  finalize tail        {t.get('finalize_tail_s')} s")
+    print(f"  words / deltas       {t.get('words')} / {t.get('deltas')}")
+    print(
+        "\n  trickle in  (SDK)    "
+        f"segments={k.get('segments_delivered')} seq_gaps={k.get('seq_gap_events')} "
+        f"retries={k.get('get_retries')} failures={k.get('get_failures')} "
+        f"stall={k.get('wait_ms_total')}ms"
+    )
+    print(
+        "  websocket out (app)  "
+        f"events={w.get('events_sent')} deltas={w.get('deltas_sent')} "
+        f"bytes={w.get('bytes_sent')} failures={w.get('send_failures')} "
+        f"cmds_in={w.get('commands_received')}"
+    )
+    print(
+        "\n  note: audio is paced to real time, so wall clock cannot drop below the\n"
+        "  audio duration — the real-time factor is pinned near 1.0 and reads as\n"
+        '  "the pipeline kept up", not as GPU speed. It climbs only if the backend\n'
+        "  falls behind. The latency signals are first word and finalize tail."
+    )
+
+
 async def _read_transcript(
     ws: aiohttp.ClientWebSocketResponse,
     done: asyncio.Event,
@@ -123,12 +160,16 @@ async def _read_transcript(
                 continue
             kind = data.get("type")
             transcript = data.get("transcript", "")
+            if kind == "stats":
+                # Sent after "done"; last event of the session.
+                _print_stats(data)
+                break
             if kind == "done":
                 print(
                     f"\n[done] {transcript!r}  "
                     f"words={data.get('word_count')} sentiment={data.get('sentiment')}"
                 )
-                break
+                continue
             print(
                 f"[delta] +{data.get('delta', '').strip()!r}  "
                 f"words={data.get('word_count')} sentiment={data.get('sentiment')}"

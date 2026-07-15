@@ -12,6 +12,10 @@ GET /ws
     send {"type": "session.update", "session": {...}} mid-stream to adjust
     settings (language, model, etc.) without stopping the stream.
 
+    The last event before close is {"type": "stats", ...}: Trickle transport
+    counters (from the SDK) plus WebSocket and latency counters (metered by this
+    app — see stats.py, the SDK does not meter WebSockets).
+
 Architecture
 ------------
 The orchestrator proxies both Trickle segments and WebSocket upgrades, so the
@@ -33,14 +37,15 @@ import asyncio
 import json
 import logging
 from contextlib import suppress
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Optional
 
 from aiohttp import web
 
 from livepeer_gateway.live_runner import register_runner
-from livepeer_gateway.trickle_subscriber import TrickleSubscriber
+from livepeer_gateway.trickle_subscriber import TrickleSubscriber, TrickleSubscriberStats
 
+from stats import TranscriptionMeter, WebSocketMeter
 from transcriber import Transcriber, make_transcriber, simple_sentiment, word_count
 
 DEFAULT_HOST = "127.0.0.1"
@@ -62,6 +67,9 @@ class TranscribeSession:
     event_queue: asyncio.Queue = field(default_factory=asyncio.Queue)
     task: Optional[asyncio.Task] = None
     transcriber: Optional[Transcriber] = None
+    # The SDK meters Trickle for us; the WS and the latency numbers are ours.
+    meter: TranscriptionMeter = field(default_factory=TranscriptionMeter)
+    ws_meter: WebSocketMeter = field(default_factory=WebSocketMeter)
 
     def to_json(self) -> dict:
         return {"session": self.session_id, "in": self.in_url, "ws": "/ws"}
@@ -86,37 +94,42 @@ def _session_id(request: web.Request) -> str:
     return request.headers.get("Livepeer-Session-Id", "").strip()
 
 
-async def _pump_audio(in_url: str, transcriber: Transcriber) -> None:
+async def _pump_audio(
+    sub: TrickleSubscriber, transcriber: Transcriber, meter: TranscriptionMeter
+) -> None:
     """Read PCM segments off the Trickle input channel and feed the transcriber."""
-    async with TrickleSubscriber(in_url) as sub:
+    while True:
+        segment = await sub.next()
+        if segment is None:
+            break
+        reader = segment.make_reader()
         while True:
-            segment = await sub.next()
-            if segment is None:
+            chunk = await reader.read()
+            if chunk is None:
                 break
-            reader = segment.make_reader()
-            while True:
-                chunk = await reader.read()
-                if chunk is None:
-                    break
-                await transcriber.feed(chunk)
-            with suppress(Exception):
-                await segment.close()
+            meter.mark_audio(len(chunk))
+            await transcriber.feed(chunk)
+        with suppress(Exception):
+            await segment.close()
 
 
-async def _drain_events(transcriber: Transcriber, event_queue: asyncio.Queue) -> None:
+async def _drain_events(session: TranscribeSession) -> None:
     """Read normalized transcriber events, compute metrics, push to the WS queue."""
     transcript = ""
-    async for event in transcriber.events():
+    async for event in session.transcriber.events():
         if event["type"] == "delta":
             if not event.get("text"):
                 # Voxtral emits empty-text deltas between words; skip them
                 # rather than spamming clients with no-op events.
                 continue
             transcript += event.get("text", "")
+            session.meter.mark_delta()
         else:
             transcript = event.get("text", "") or transcript
         clean = transcript.strip()
-        await event_queue.put(
+        if event["type"] != "delta":
+            session.meter.mark_done(clean)
+        await session.event_queue.put(
             {
                 "type": event["type"],
                 "delta": event.get("text", "") if event["type"] == "delta" else "",
@@ -127,22 +140,50 @@ async def _drain_events(transcriber: Transcriber, event_queue: asyncio.Queue) ->
         )
 
 
-async def _run_pipeline(
-    in_url: str,
-    transcriber: Transcriber,
-    event_queue: asyncio.Queue,
-) -> None:
+def _stats_event(
+    session: TranscribeSession, trickle_stats: Optional[TrickleSubscriberStats]
+) -> dict:
+    """Final event of a session: Trickle in (from the SDK) + WS out (ours)."""
+    transcription = session.meter.get_stats()
+    websocket = session.ws_meter.get_stats()
+    trickle = None
+    if trickle_stats is not None:
+        trickle = asdict(trickle_stats)
+        trickle["elapsed_s"] = round(trickle["elapsed_s"], 3)
+    log.info("stats %s", transcription)
+    log.info("stats %s", websocket)
+    if trickle_stats is not None:
+        log.info("stats %s", trickle_stats)
+    return {
+        "type": "stats",
+        "transcription": transcription.to_json(),
+        "websocket": websocket.to_json(),
+        "trickle": trickle,
+    }
+
+
+async def _run_pipeline(session: TranscribeSession, in_url: str) -> None:
     """Wire input audio → transcriber → metrics → WS event queue."""
     drain: Optional[asyncio.Task] = None
+    trickle_stats: Optional[TrickleSubscriberStats] = None
     try:
-        await transcriber.open()
-        drain = asyncio.create_task(_drain_events(transcriber, event_queue))
-        await _pump_audio(in_url, transcriber)
+        await session.transcriber.open()
+        drain = asyncio.create_task(_drain_events(session))
+        async with TrickleSubscriber(in_url) as sub:
+            try:
+                await _pump_audio(sub, session.transcriber, session.meter)
+            finally:
+                # Read the transport counters while the subscriber is still open,
+                # so a mid-stream failure still reports how far the audio got.
+                trickle_stats = sub.get_stats()
     except Exception:
         log.exception("transcription pipeline failed")
     finally:
+        # Audio is done; the finalize tail is measured from here to the final
+        # transcript, so mark it before close() triggers the flush.
+        session.meter.mark_audio_end()
         with suppress(Exception):
-            await transcriber.close()
+            await session.transcriber.close()
         if drain is not None:
             try:
                 await drain
@@ -150,21 +191,28 @@ async def _run_pipeline(
                 # A dead drain means transcript events silently stop reaching
                 # clients — surface it instead of swallowing it.
                 log.exception("event drain task failed")
+        await session.event_queue.put(_stats_event(session, trickle_stats))
         # Signal the WS drain coroutine that no more events are coming.
-        await event_queue.put(_WS_DONE)
+        await session.event_queue.put(_WS_DONE)
         log.info("transcription pipeline finished")
 
 
-async def _drain_queue_to_ws(queue: asyncio.Queue, ws: web.WebSocketResponse) -> None:
-    """Forward queued transcript events to the WebSocket client."""
+async def _drain_queue_to_ws(session: TranscribeSession, ws: web.WebSocketResponse) -> None:
+    """Forward queued transcript events to the WebSocket client, metering as we go."""
     try:
         while True:
-            event = await queue.get()
+            event = await session.event_queue.get()
             if event is _WS_DONE:
                 await ws.close()
                 return
-            with suppress(Exception):
-                await ws.send_json(event)
+            # Serialize here rather than send_json so the payload size is
+            # measurable — the SDK counts Trickle bytes for us, not these.
+            payload = json.dumps(event)
+            try:
+                await ws.send_str(payload)
+                session.ws_meter.record_sent(event, len(payload))
+            except Exception:
+                session.ws_meter.record_send_failure()
     except asyncio.CancelledError:
         pass
 
@@ -206,7 +254,7 @@ async def _handle_transcribe(request: web.Request) -> web.Response:
         event_queue=event_queue,
         transcriber=transcriber,
     )
-    task = asyncio.create_task(_run_pipeline(in_internal_url, transcriber, event_queue))
+    task = asyncio.create_task(_run_pipeline(session, in_internal_url))
     task.add_done_callback(_clear_state)
     session.task = task
     state = session
@@ -224,12 +272,13 @@ async def _handle_ws(request: web.Request) -> web.WebSocketResponse:
     await ws.prepare(request)
 
     session = state
-    drain_task = asyncio.create_task(_drain_queue_to_ws(session.event_queue, ws))
+    drain_task = asyncio.create_task(_drain_queue_to_ws(session, ws))
 
     try:
         async for msg in ws:
             if msg.type == web.WSMsgType.TEXT:
                 log.info("ws command received: %.200s", msg.data)
+                session.ws_meter.record_command()
                 with suppress(Exception):
                     cmd = json.loads(msg.data)
                     if cmd.get("type") == "session.update" and session.transcriber is not None:

@@ -76,6 +76,45 @@ Validated on an RTX 4090 (24 GB): the compose file caps `--max-model-len` at
 native 131k context does not). The Voxtral model is public on HuggingFace — no
 token needed.
 
+## Performance
+
+The last event of every session is `{"type": "stats", ...}`, which the client
+prints as a summary. It has three parts:
+
+```
+──── performance ────
+  audio                6.56 s
+  wall clock           7.355 s
+  real-time factor     1.121x
+  time to first word   2.364 s
+  finalize tail        0.379 s
+  words / deltas       15 / 28
+
+  trickle in  (SDK)    segments=14 seq_gaps=0 retries=0 failures=0 stall=6970ms
+  websocket out (app)  events=29 deltas=28 bytes=3779 failures=0 cmds_in=1
+```
+
+**Trickle in** comes free from the SDK (`TrickleSubscriber.get_stats()`) and is
+transport health: `seq_gaps` above 0 means audio was dropped. **WebSocket out**
+and the latency numbers are metered by this app in [stats.py](stats.py) — the SDK
+does not meter WebSockets, so an app that streams results over one has to count
+them itself.
+
+Two caveats worth reading before quoting any of it:
+
+- **Real-time factor is pinned near 1.0 by design.** It is wall clock ÷ audio, and
+  the client paces audio to real time, so wall clock can never drop below the
+  audio duration however fast the GPU is. Read it as *"the pipeline kept up"* — it
+  climbs only when the backend falls behind. It is not model speed. Publishing
+  unpaced does not fix this: Trickle deletes unread segments when the publisher
+  closes, so `--no-realtime` drops most of the audio and reports confident
+  nonsense (see [FEEDBACK.md](FEEDBACK.md) #2, #9).
+- **Time to first word includes lead-in silence.** It moves with whatever quiet
+  precedes speech in the clip. The **finalize tail** — last audio byte to final
+  transcript — is the stable figure, reproducing within ~10 ms across runs.
+
+Numbers above: RTX 4090, Voxtral-Mini-4B-Realtime, realtime-paced speech.
+
 ## Run on-chain (paid)
 
 Layer `docker-compose.onchain.yml` to add a remote signer and run the

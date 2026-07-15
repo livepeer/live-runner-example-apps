@@ -1,0 +1,30 @@
+# End-to-end offchain demo: orchestrator + screen-agent app.
+#
+# The orchestrator service is defined once in ../compose.orchestrator.yml and
+# pulled in with `extends`; this file only adds the app. Once up, call it from
+# the host with the SDK:
+#   docker compose up -d --build
+#   uv run demo_video.py demo.mp4
+#   uv run client.py demo.mp4 --discovery https://localhost:8935/discovery
+
+services:
+  orchestrator:
+    extends:
+      file: ../compose.orchestrator.yml
+      service: orchestrator
+
+  app:
+    build: .
+    container_name: example_apps_screen_agent
+    # Wait for the orchestrator's healthcheck so registration doesn't race its boot.
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    command:
+      - --host=0.0.0.0
+      - --orchestrator=https://orchestrator:8935
+      - --orchSecret=abcdef
+      - --runner-url=http://app:8989
+      - --app-id=livepeer-example/screen-agent
+      # No GPU/weights in the container — deterministic fallback engines.
+      - --force-fallback

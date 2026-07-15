@@ -46,6 +46,7 @@ Need a schema that isn't here? [Open an issue](https://github.com/livepeer/live-
 | [`tiles`](./tiles)             | Capacity fan-out — one session per tile         | dynamic      | persistent (single-shot by nature) | HTTP (base64 PNG) |
 | [`echo`](./echo)               | Realtime video, transformed and echoed back     | dynamic      | persistent                         | trickle           |
 | [`vllm`](./vllm)               | Drop-in OpenAI API; the client stays unmodified | static       | persistent (single-shot by nature) | HTTP + SSE        |
+| [`screen-agent`](./screen-agent) | Wrapping an existing pip package — video in, bug report out | dynamic | persistent (single-shot by nature) | HTTP (base64 mp4) |
 
 Start with `hello-world` (the smallest end-to-end path); the others each layer on one new idea. More will follow, including a full example that exercises every feature. Each is self-contained and runs **offchain** (free, no wallet); most also run **on-chain** (paid) — see each README.
 

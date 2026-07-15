@@ -1,0 +1,15 @@
+[project]
+name = "livepeer-screen-agent-example"
+version = "0.1.0"
+description = "screen-agent example app for the Livepeer network."
+requires-python = ">=3.12"
+dependencies = [
+    "livepeer-gateway",
+    # For demo_video.py only (synthetic test recording).
+    "numpy>=1.26,<3",
+    "opencv-python-headless>=4.10,<5",
+]
+
+# livepeer-gateway is not on PyPI yet; pull it from the branch.
+[tool.uv.sources]
+livepeer-gateway = { git = "https://github.com/livepeer/livepeer-python-gateway", branch = "ja/live-runner" }

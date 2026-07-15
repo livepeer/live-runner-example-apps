@@ -84,21 +84,28 @@ prints as a summary. It has three parts:
 ```
 ──── performance ────
   audio                6.56 s
-  wall clock           7.395 s
-  real-time factor     1.127x
-  time to first word   2.418 s
-  finalize tail        0.374 s
+  wall clock           7.405 s
+  real-time factor     1.129x
+  time to first word   2.392 s
+  finalize tail        0.359 s
   words / deltas       15 / 28
 
-  trickle in  (SDK)    segments=14 seq_gaps=0 retries=0 failures=0 stall=7009ms
-  websocket out (app)  events=43 deltas=28 bytes=4375 failures=0 cmds_in=1
+  trickle publish (SDK)  segments=14/14 bytes=209920 (30 kB/s) posts_ok=14 failed=0 retries=0
+  trickle ingest  (SDK)  segments=14 seq_gaps=0 retries=0 failures=0 stall=7036ms
+  websocket out   (app)  events=43 deltas=28 bytes=4375 failures=0 cmds_in=1
 ```
 
-**Trickle in** comes free from the SDK (`TrickleSubscriber.get_stats()`) and is
-transport health: `seq_gaps` above 0 means audio was dropped. **WebSocket out**
-and the latency numbers are metered by this app in [stats.py](stats.py) — the SDK
-does not meter WebSockets, so an app that streams results over one has to count
-them itself.
+The three transport lines follow the audio's real path: the client publishes, the
+runner ingests, the runner streams results back.
+
+- **trickle publish** and **trickle ingest** come free from the SDK
+  (`TricklePublisher.get_stats()` and `TrickleSubscriber.get_stats()`). Reading
+  them *together* is the useful part — `publish segments=14/14` against `ingest
+  segments=14` proves nothing was dropped in between. That check matters because
+  the transport will not tell you: dropped audio still reports `seq_gaps=0`.
+- **websocket out** and every latency figure are metered by this app in
+  [stats.py](stats.py). The SDK does not meter WebSockets, so an app that streams
+  its results over one has to count them itself.
 
 ### Two modes, two different numbers
 
@@ -112,7 +119,9 @@ figure: it moves with whatever silence precedes speech in the clip.
 Run with `--no-realtime` to remove the pacing floor and measure real throughput:
 
 ```
-audio 6.56 s · wall clock 1.78 s · real-time factor 0.271x   → ~3.7x realtime
+audio 6.56 s · wall clock 1.57 s · real-time factor 0.24x    → ~4x realtime
+trickle publish  segments=14/14  bytes=209920 (1159 kB/s)    → 38x the paced rate,
+trickle ingest   segments=14  seq_gaps=0                        still zero loss
 ```
 
 Both are honest; they measure different things. Paced gives live latency, unpaced

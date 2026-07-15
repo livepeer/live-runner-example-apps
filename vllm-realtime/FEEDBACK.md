@@ -44,7 +44,10 @@ was confusing, and the open questions a second builder would hit.
    segment, waits for the runner to report it consumed it over the WebSocket,
    then publishes the next. A documented "lossless vs live-edge" subscribe mode
    (or any retention window) would spare every non-video app from rediscovering
-   this the hard way.
+   this the hard way. Worth noting the loss *is* detectable, but only by pairing
+   both sides: `TricklePublisher.get_stats().segments_completed` against
+   `TrickleSubscriber.get_stats().segments_delivered`. Neither number is alarming
+   alone. Nothing in the API suggests you should compare them.
 3. **Importing the SDK pulls in PyAV.** `livepeer_gateway/__init__.py` imports the
    media modules at top level, so `import livepeer_gateway` (even just for
    Trickle) requires `av`. It installs transitively, but a from-source build on a
@@ -127,6 +130,7 @@ was confusing, and the open questions a second builder would hit.
     1.13x, time to first word 2.4 s. The tail is the stable figure — it
     reproduced within ~10 ms across runs; first-word moves with whatever silence
     precedes speech in the clip.
-  - *Unpaced with backpressure* (throughput): wall clock **1.78 s** for 6.56 s of
-    audio — real-time factor **0.27x**, i.e. ~3.7x faster than realtime, with an
-    identical transcript.
+  - *Unpaced with backpressure* (throughput): wall clock **1.57 s** for 6.56 s of
+    audio — real-time factor **0.24x**, i.e. ~4x faster than realtime, with an
+    identical transcript. The publisher sustained 1159 kB/s (38x the paced
+    30 kB/s) and still delivered 14/14 segments.

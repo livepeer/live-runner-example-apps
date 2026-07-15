@@ -27,6 +27,7 @@ import ssl
 import struct
 import wave
 from contextlib import suppress
+from typing import Optional
 
 import aiohttp
 
@@ -34,7 +35,7 @@ from livepeer_gateway.errors import LivepeerGatewayError
 from livepeer_gateway.http import post_json
 from livepeer_gateway.live_runner import stop_runner_session
 from livepeer_gateway.selection import reserve_session
-from livepeer_gateway.trickle_publisher import TricklePublisher
+from livepeer_gateway.trickle_publisher import TricklePublisher, TricklePublisherStats
 
 DEFAULT_DISCOVERY = "http://localhost:8935/discovery"
 APP_ID = "livepeer-sample/vllm-realtime"
@@ -148,8 +149,8 @@ class _Progress:
         return True
 
 
-def _print_stats(data: dict) -> None:
-    """Render the runner's final stats event."""
+def _print_stats(data: dict, publisher: Optional[TricklePublisherStats]) -> None:
+    """Render the whole path: our publish side, then the runner's stats event."""
     t = data.get("transcription") or {}
     w = data.get("websocket") or {}
     k = data.get("trickle") or {}
@@ -161,14 +162,30 @@ def _print_stats(data: dict) -> None:
     print(f"  time to first word   {t.get('time_to_first_word_s')} s")
     print(f"  finalize tail        {t.get('finalize_tail_s')} s")
     print(f"  words / deltas       {t.get('words')} / {t.get('deltas')}")
+
+    # Three hops, in order: we publish -> the runner ingests -> it streams back.
+    # The first two come free from the SDK; the third we count ourselves.
+    if publisher is not None:
+        rate = (
+            publisher.bytes_submitted_to_transport / publisher.elapsed_s
+            if publisher.elapsed_s > 0
+            else 0.0
+        )
+        print(
+            "\n  trickle publish (SDK)  "
+            f"segments={publisher.segments_completed}/{publisher.segments_started} "
+            f"bytes={publisher.bytes_submitted_to_transport} "
+            f"({rate / 1000:.0f} kB/s) posts_ok={publisher.post_success} "
+            f"failed={publisher.segments_failed} retries={publisher.post_retries_no_body_consumed}"
+        )
     print(
-        "\n  trickle in  (SDK)    "
+        "  trickle ingest  (SDK)  "
         f"segments={k.get('segments_delivered')} seq_gaps={k.get('seq_gap_events')} "
         f"retries={k.get('get_retries')} failures={k.get('get_failures')} "
         f"stall={k.get('wait_ms_total')}ms"
     )
     print(
-        "  websocket out (app)  "
+        "  websocket out   (app)  "
         f"events={w.get('events_sent')} deltas={w.get('deltas_sent')} "
         f"bytes={w.get('bytes_sent')} failures={w.get('send_failures')} "
         f"cmds_in={w.get('commands_received')}"
@@ -185,6 +202,7 @@ async def _read_transcript(
     ws: aiohttp.ClientWebSocketResponse,
     done: asyncio.Event,
     progress: _Progress,
+    stats_sink: dict,
 ) -> None:
     """Print transcript + metrics as JSON events arrive on the WebSocket."""
     try:
@@ -202,8 +220,9 @@ async def _read_transcript(
                 progress.update(data.get("audio_bytes", 0))
                 continue
             if kind == "stats":
-                # Sent after "done"; last event of the session.
-                _print_stats(data)
+                # Sent after "done"; last event of the session. Hand it back to
+                # main, which pairs it with our publish-side stats and prints.
+                stats_sink.update(data)
                 break
             if kind == "done":
                 print(
@@ -223,7 +242,7 @@ async def _read_transcript(
 
 async def _publish_pcm(
     in_url: str, pcm: bytes, realtime: bool, progress: _Progress
-) -> None:
+) -> TricklePublisherStats:
     """Publish PCM to the Trickle input channel, ~0.5 s per segment, 40 ms per frame.
 
     A Trickle channel keeps no backlog — a subscriber reads the live edge, and an
@@ -256,6 +275,9 @@ async def _publish_pcm(
                     progress.consumed, published, DRAIN_TIMEOUT_SECONDS,
                 )
                 break
+
+    # Read after close so the counters include the final segment flush.
+    return pub.get_stats()
 
 
 async def main() -> None:
@@ -309,9 +331,12 @@ async def main() -> None:
 
                 done = asyncio.Event()
                 progress = _Progress()
-                reader = asyncio.create_task(_read_transcript(ws, done, progress))
+                stats_sink: dict = {}
+                reader = asyncio.create_task(
+                    _read_transcript(ws, done, progress, stats_sink)
+                )
 
-                await _publish_pcm(
+                publisher_stats = await _publish_pcm(
                     in_url, pcm, realtime=not args.no_realtime, progress=progress
                 )
 
@@ -320,6 +345,11 @@ async def main() -> None:
                 reader.cancel()
                 with suppress(Exception):
                     await reader
+
+                if stats_sink:
+                    _print_stats(stats_sink, publisher_stats)
+                else:
+                    log.warning("no stats event received from the runner")
 
     except LivepeerGatewayError as exc:
         raise SystemExit(f"ERROR: {exc}") from exc

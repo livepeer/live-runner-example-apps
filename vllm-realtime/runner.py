@@ -12,6 +12,10 @@ GET /ws
     send {"type": "session.update", "session": {...}} mid-stream to adjust
     settings (language, model, etc.) without stopping the stream.
 
+    {"type": "progress", "audio_bytes": N} reports how much audio has actually
+    been read off the Trickle channel. The client uses it as backpressure: the
+    channel keeps no backlog, so it must not publish past what we have consumed.
+
     The last event before close is {"type": "stats", ...}: Trickle transport
     counters (from the SDK) plus WebSocket and latency counters (metered by this
     app — see stats.py, the SDK does not meter WebSockets).
@@ -94,9 +98,7 @@ def _session_id(request: web.Request) -> str:
     return request.headers.get("Livepeer-Session-Id", "").strip()
 
 
-async def _pump_audio(
-    sub: TrickleSubscriber, transcriber: Transcriber, meter: TranscriptionMeter
-) -> None:
+async def _pump_audio(sub: TrickleSubscriber, session: TranscribeSession) -> None:
     """Read PCM segments off the Trickle input channel and feed the transcriber."""
     while True:
         segment = await sub.next()
@@ -107,10 +109,17 @@ async def _pump_audio(
             chunk = await reader.read()
             if chunk is None:
                 break
-            meter.mark_audio(len(chunk))
-            await transcriber.feed(chunk)
+            session.meter.mark_audio(len(chunk))
+            await session.transcriber.feed(chunk)
         with suppress(Exception):
             await segment.close()
+        # Report ingest progress after every segment. Trickle deletes unread
+        # segments the moment the publisher closes, so a client that publishes
+        # faster than we consume would lose most of its audio. This lets the
+        # client hold the stream open until we have actually caught up.
+        await session.event_queue.put(
+            {"type": "progress", "audio_bytes": session.meter.bytes_in}
+        )
 
 
 async def _drain_events(session: TranscribeSession) -> None:
@@ -169,9 +178,14 @@ async def _run_pipeline(session: TranscribeSession, in_url: str) -> None:
     try:
         await session.transcriber.open()
         drain = asyncio.create_task(_drain_events(session))
+        # Default start_seq joins at the live edge, which is the only option:
+        # the channel keeps no backlog, so an earlier index answers 470 (no data)
+        # rather than replaying. Audio is not droppable the way stale video
+        # frames are, so the client must not move the edge forward until we have
+        # read the current segment — see the progress events below.
         async with TrickleSubscriber(in_url) as sub:
             try:
-                await _pump_audio(sub, session.transcriber, session.meter)
+                await _pump_audio(sub, session)
             finally:
                 # Read the transport counters while the subscriber is still open,
                 # so a mid-stream failure still reports how far the audio got.

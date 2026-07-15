@@ -45,6 +45,10 @@ FRAME_SECONDS = 0.04               # 40 ms frames per Trickle write
 SEGMENT_SECONDS = 0.5              # one Trickle segment per ~0.5 s of audio
 IN_MIME = "audio/raw"
 
+# How long to wait for the runner to finish reading what we published before
+# closing the stream anyway. Generous: a cold backend can lag well behind.
+DRAIN_TIMEOUT_SECONDS = 60.0
+
 log = logging.getLogger("vllm-realtime-client")
 
 
@@ -61,10 +65,9 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--no-realtime", action="store_true",
-        help="Publish as fast as possible instead of pacing to wall clock. "
-             "Trickle deletes unread segments when the publisher closes, so an "
-             "unpaced run drops most of its audio — smoke tests only, never "
-             "measurement (see FEEDBACK.md).",
+        help="Publish as fast as the runner can consume instead of pacing to "
+             "wall clock. Removes the pacing floor, so the real-time factor "
+             "measures actual backend throughput.",
     )
     parser.add_argument(
         "--language", default="",
@@ -112,6 +115,39 @@ def _make_ssl_ctx() -> ssl.SSLContext:
     return ctx
 
 
+class _Progress:
+    """How much of our published audio the runner reports it has consumed.
+
+    Trickle deletes unread segments the instant the publisher closes, so
+    publishing faster than the runner consumes silently loses audio. The runner
+    reports its ingest position over the WebSocket; we wait for it to catch up
+    before closing the stream. That turns "publish and hope" into backpressure.
+    """
+
+    def __init__(self) -> None:
+        self.consumed = 0
+        self._bump = asyncio.Event()
+
+    def update(self, consumed: int) -> None:
+        self.consumed = consumed
+        self._bump.set()
+
+    async def wait_for(self, target: int, timeout: float) -> bool:
+        """Block until the runner has consumed `target` bytes. False on timeout."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        while self.consumed < target:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                return False
+            self._bump.clear()
+            if self.consumed >= target:
+                return True
+            with suppress(asyncio.TimeoutError):
+                await asyncio.wait_for(self._bump.wait(), timeout=remaining)
+        return True
+
+
 def _print_stats(data: dict) -> None:
     """Render the runner's final stats event."""
     t = data.get("transcription") or {}
@@ -138,16 +174,17 @@ def _print_stats(data: dict) -> None:
         f"cmds_in={w.get('commands_received')}"
     )
     print(
-        "\n  note: audio is paced to real time, so wall clock cannot drop below the\n"
-        "  audio duration — the real-time factor is pinned near 1.0 and reads as\n"
-        '  "the pipeline kept up", not as GPU speed. It climbs only if the backend\n'
-        "  falls behind. The latency signals are first word and finalize tail."
+        "\n  note: audio is paced to real time by default, so wall clock cannot drop\n"
+        '  below the audio duration — the real-time factor reads as "the pipeline\n'
+        '  kept up", not as backend speed. Re-run with --no-realtime to remove the\n'
+        "  pacing floor and measure actual throughput."
     )
 
 
 async def _read_transcript(
     ws: aiohttp.ClientWebSocketResponse,
     done: asyncio.Event,
+    progress: _Progress,
 ) -> None:
     """Print transcript + metrics as JSON events arrive on the WebSocket."""
     try:
@@ -160,6 +197,10 @@ async def _read_transcript(
                 continue
             kind = data.get("type")
             transcript = data.get("transcript", "")
+            if kind == "progress":
+                # Ingest position, not transcript — drives backpressure only.
+                progress.update(data.get("audio_bytes", 0))
+                continue
             if kind == "stats":
                 # Sent after "done"; last event of the session.
                 _print_stats(data)
@@ -180,10 +221,23 @@ async def _read_transcript(
         done.set()
 
 
-async def _publish_pcm(in_url: str, pcm: bytes, realtime: bool) -> None:
-    """Publish PCM to the Trickle input channel, ~0.5 s per segment, 40 ms per frame."""
+async def _publish_pcm(
+    in_url: str, pcm: bytes, realtime: bool, progress: _Progress
+) -> None:
+    """Publish PCM to the Trickle input channel, ~0.5 s per segment, 40 ms per frame.
+
+    A Trickle channel keeps no backlog — a subscriber reads the live edge, and an
+    earlier index answers 470 rather than replaying. So publishing a segment
+    before the runner has read the previous one does not queue it, it destroys
+    it. After each segment we wait for the runner to report that it consumed
+    everything so far, which keeps at most one segment in flight and makes the
+    runner's ingest rate the publish rate. Under realtime pacing the wait is a
+    no-op (we are already slower than the backend); it is what lets --no-realtime
+    run flat out without shredding the audio.
+    """
     frame_bytes = int(FRAME_SECONDS * BYTES_PER_SECOND)
     seg_bytes = int(SEGMENT_SECONDS * BYTES_PER_SECOND)
+    published = 0
     async with TricklePublisher(in_url, IN_MIME) as pub:
         for seg_start in range(0, len(pcm), seg_bytes):
             segment = pcm[seg_start : seg_start + seg_bytes]
@@ -193,6 +247,15 @@ async def _publish_pcm(in_url: str, pcm: bytes, realtime: bool) -> None:
                     await writer.write(segment[off : off + frame_bytes])
                     if realtime:
                         await asyncio.sleep(FRAME_SECONDS)
+            published += len(segment)
+
+            if not await progress.wait_for(published, timeout=DRAIN_TIMEOUT_SECONDS):
+                log.warning(
+                    "runner stalled at %d/%d bytes after %.0fs; stopping publish "
+                    "rather than overwriting audio it has not read",
+                    progress.consumed, published, DRAIN_TIMEOUT_SECONDS,
+                )
+                break
 
 
 async def main() -> None:
@@ -245,9 +308,12 @@ async def main() -> None:
                     log.info("sent live session.update language=%r", args.language)
 
                 done = asyncio.Event()
-                reader = asyncio.create_task(_read_transcript(ws, done))
+                progress = _Progress()
+                reader = asyncio.create_task(_read_transcript(ws, done, progress))
 
-                await _publish_pcm(in_url, pcm, realtime=not args.no_realtime)
+                await _publish_pcm(
+                    in_url, pcm, realtime=not args.no_realtime, progress=progress
+                )
 
                 with suppress(asyncio.TimeoutError):
                     await asyncio.wait_for(done.wait(), timeout=30)

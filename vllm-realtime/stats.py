@@ -21,14 +21,14 @@ Two things worth knowing if you copy this into your own app:
    do not exist for us. Audio duration is derived from bytes instead.
 
 2. ``realtime_factor`` is wall time / audio duration, so it measures the whole
-   pipeline, not the model. The client paces audio to real time, so wall time can
-   never drop below the audio duration: the factor is pinned just above 1.0 no
-   matter how fast the GPU is. Read it as "did the pipeline keep up?" — it holds
-   near 1.0 while the backend keeps pace and climbs once it falls behind.
-   Publishing unpaced does *not* turn it into a throughput measurement: Trickle
-   deletes unread segments when the publisher closes, so an unpaced run drops most
-   of its audio and measures nothing (see FEEDBACK.md). The honest latency signals
-   are ``time_to_first_word_s`` and ``finalize_tail_s``.
+   pipeline, not the model. Under the client's default realtime pacing, wall time
+   can never drop below the audio duration and the factor is pinned just above
+   1.0 however fast the backend is — there, read it as "did the pipeline keep
+   up?". Run the client with ``--no-realtime`` to remove the pacing floor and let
+   it measure real throughput; the client applies backpressure from this app's
+   ``progress`` events, so publishing unpaced no longer outruns Trickle's segment
+   retention. ``time_to_first_word_s`` moves with lead-in silence in the audio;
+   ``finalize_tail_s`` is the stable latency figure.
 """
 from __future__ import annotations
 
@@ -180,6 +180,11 @@ class TranscriptionMeter:
         self._bytes_in = 0
         self._deltas = 0
         self._words = 0
+
+    @property
+    def bytes_in(self) -> int:
+        """Audio bytes consumed so far — reported to the client as backpressure."""
+        return self._bytes_in
 
     def mark_audio(self, nbytes: int) -> None:
         if self._t_first_audio is None:

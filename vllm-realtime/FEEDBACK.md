@@ -29,12 +29,22 @@ was confusing, and the open questions a second builder would hit.
    subscribe on that, hand `url` to the client. `echo` does this correctly, but
    nothing shouts about it and the failure mode (a subscriber that never sees a
    segment) is silent until you read orchestrator logs.
-2. **Trickle streams are deleted when the publisher closes — unread segments are
-   dropped.** Publishing faster than realtime (`--no-realtime`) pushes all
-   segments and deletes the stream within milliseconds; a subscriber that
-   connects even a beat later gets nothing. Paced (realtime) publishing works
-   because pub and sub overlap. Worth documenting whether the orchestrator can
-   buffer/retain segments for late subscribers.
+2. **Trickle channels keep no backlog: the subscriber reads the live edge, so
+   publishing faster than it consumes destroys audio.** `TrickleSubscriber`
+   defaults to `start_seq=-2` — join at the live edge — and an earlier index
+   answers `470` ("no data at this index") instead of replaying, so segments
+   published while you were behind are simply gone. Measured here: publishing
+   6.5 s of speech unpaced delivered **1 of 14 segments**
+   (`segments_delivered=1, latest_seq=14`), and asking for `start_seq=0`
+   delivered **0** and reset to the edge. This is the right default for video —
+   drop stale frames, stay current — but audio is not droppable, and nothing in
+   the API signals the difference: there is no error, no gap event
+   (`seq_gap_events=0`), just a transcript that comes back short. Apps that
+   cannot lose bytes need app-level backpressure; this example publishes one
+   segment, waits for the runner to report it consumed it over the WebSocket,
+   then publishes the next. A documented "lossless vs live-edge" subscribe mode
+   (or any retention window) would spare every non-video app from rediscovering
+   this the hard way.
 3. **Importing the SDK pulls in PyAV.** `livepeer_gateway/__init__.py` imports the
    media modules at top level, so `import livepeer_gateway` (even just for
    Trickle) requires `av`. It installs transitively, but a from-source build on a
@@ -76,14 +86,16 @@ was confusing, and the open questions a second builder would hit.
    frame count, and audio duration has to be derived from byte totals instead.
    Second, there is no suggested shape for app-authored stats, so every WS app
    will invent its own field names for the same quantities.
-9. **Realtime pacing makes a real-time factor structurally meaningless.** Wall
-   clock can't drop below the audio duration when the client paces to real time,
-   so RTF is pinned just above 1.0 regardless of backend speed — it answers "did
-   the pipeline keep up?", not "how fast is the model?". The obvious workaround
-   (publish unpaced) collides with #2: the stream is deleted before the subscriber
-   drains it, so an unpaced run silently transcribes ~1 segment of audio and
-   reports confident nonsense. There is currently no way to measure true
-   throughput end-to-end through Trickle without racing the deletion.
+9. **A real-time factor only means something once the client has backpressure.**
+   Wall clock cannot drop below the audio duration while the client paces to real
+   time, so RTF is pinned just above 1.0 regardless of backend speed and only
+   answers "did the pipeline keep up?". Publishing unpaced to measure real
+   throughput runs straight into #2 and reports confident nonsense (1 segment of
+   14, zero words, RTF 1.89 — all with no error raised anywhere). Once the client
+   holds the live edge until the runner acknowledges each segment, the same clip
+   reports **RTF 0.27 (~3.7x realtime)** and the figure is finally real. Worth
+   noting that the two modes measure different things and both are useful: paced
+   gives live latency (finalize tail 0.37 s), unpaced gives throughput headroom.
 
 ## Suggestions
 
@@ -96,6 +108,10 @@ was confusing, and the open questions a second builder would hit.
 - Ship a `WebSocketStats` counter helper next to the Trickle ones, so apps that
   stream results over a WebSocket report the same shape instead of each inventing
   one (see #8).
+- Give `TrickleSubscriber` a lossless subscribe mode, or document the live-edge
+  contract loudly (see #2). Right now the safe default for video is a silent
+  data-loss trap for every other media type, and the counters report success
+  (`seq_gap_events=0`) while audio disappears.
 
 ## Environment
 
@@ -105,9 +121,12 @@ was confusing, and the open questions a second builder would hit.
   570.x/CUDA 12.8). Live speech was transcribed with word-by-word deltas
   streaming over the orchestrator-proxied WebSocket while audio was still
   being published.
-- Measured on that setup, 6.56 s of speech published at realtime pace: time to
-  first word 2.4 s (inflated by lead-in silence in the clip), finalize tail
-  0.38 s, real-time factor 1.12x, 28 deltas / 15 words, and zero Trickle
-  sequence gaps, retries or failures across 14 segments. The finalize tail is
-  the stable figure — it reproduced within ~10 ms across runs, while first-word
-  moves with whatever silence precedes speech.
+- Measured on that setup with 6.56 s of speech, 14 segments, no sequence gaps,
+  retries or failures in either mode:
+  - *Realtime-paced* (live latency): finalize tail **0.37 s**, real-time factor
+    1.13x, time to first word 2.4 s. The tail is the stable figure — it
+    reproduced within ~10 ms across runs; first-word moves with whatever silence
+    precedes speech in the clip.
+  - *Unpaced with backpressure* (throughput): wall clock **1.78 s** for 6.56 s of
+    audio — real-time factor **0.27x**, i.e. ~3.7x faster than realtime, with an
+    identical transcript.

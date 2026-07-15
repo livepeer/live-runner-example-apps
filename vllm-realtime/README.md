@@ -84,14 +84,14 @@ prints as a summary. It has three parts:
 ```
 ──── performance ────
   audio                6.56 s
-  wall clock           7.355 s
-  real-time factor     1.121x
-  time to first word   2.364 s
-  finalize tail        0.379 s
+  wall clock           7.395 s
+  real-time factor     1.127x
+  time to first word   2.418 s
+  finalize tail        0.374 s
   words / deltas       15 / 28
 
-  trickle in  (SDK)    segments=14 seq_gaps=0 retries=0 failures=0 stall=6970ms
-  websocket out (app)  events=29 deltas=28 bytes=3779 failures=0 cmds_in=1
+  trickle in  (SDK)    segments=14 seq_gaps=0 retries=0 failures=0 stall=7009ms
+  websocket out (app)  events=43 deltas=28 bytes=4375 failures=0 cmds_in=1
 ```
 
 **Trickle in** comes free from the SDK (`TrickleSubscriber.get_stats()`) and is
@@ -100,20 +100,33 @@ and the latency numbers are metered by this app in [stats.py](stats.py) — the 
 does not meter WebSockets, so an app that streams results over one has to count
 them itself.
 
-Two caveats worth reading before quoting any of it:
+### Two modes, two different numbers
 
-- **Real-time factor is pinned near 1.0 by design.** It is wall clock ÷ audio, and
-  the client paces audio to real time, so wall clock can never drop below the
-  audio duration however fast the GPU is. Read it as *"the pipeline kept up"* — it
-  climbs only when the backend falls behind. It is not model speed. Publishing
-  unpaced does not fix this: Trickle deletes unread segments when the publisher
-  closes, so `--no-realtime` drops most of the audio and reports confident
-  nonsense (see [FEEDBACK.md](FEEDBACK.md) #2, #9).
-- **Time to first word includes lead-in silence.** It moves with whatever quiet
-  precedes speech in the clip. The **finalize tail** — last audio byte to final
-  transcript — is the stable figure, reproducing within ~10 ms across runs.
+By default the client paces audio to real time, so wall clock can never drop
+below the audio duration — the **real-time factor is pinned near 1.0 however fast
+the backend is**. In that mode it answers *"did the pipeline keep up?"*, and the
+latency signal is the **finalize tail** (last audio byte → final transcript),
+which reproduces within ~10 ms across runs. Time to first word is *not* a stable
+figure: it moves with whatever silence precedes speech in the clip.
 
-Numbers above: RTX 4090, Voxtral-Mini-4B-Realtime, realtime-paced speech.
+Run with `--no-realtime` to remove the pacing floor and measure real throughput:
+
+```
+audio 6.56 s · wall clock 1.78 s · real-time factor 0.271x   → ~3.7x realtime
+```
+
+Both are honest; they measure different things. Paced gives live latency, unpaced
+gives throughput headroom.
+
+`--no-realtime` is safe because the client applies **backpressure**: a Trickle
+channel keeps no backlog, so a segment published before the runner reads the
+previous one is destroyed, not queued. The client publishes one segment, waits
+for the runner's `progress` event, then publishes the next — so "as fast as
+possible" means "as fast as the runner consumes". Without that, an unpaced run
+delivers 1 segment of 14 and reports confident nonsense, with no error raised
+anywhere. See [FEEDBACK.md](FEEDBACK.md) #2 and #9.
+
+Numbers above: RTX 4090, Voxtral-Mini-4B-Realtime.
 
 ## Run on-chain (paid)
 

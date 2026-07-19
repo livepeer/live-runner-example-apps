@@ -1,0 +1,13 @@
+{
+  "runners": [
+    {
+      "label": "flux-klein",
+      "app": "livepeer-example/flux-klein",
+      "runner_url": "http://app:8720",
+      "health_url": "/health",
+      "mode": "persistent",
+      "capacity": 1,
+      "price_info": { "price_per_unit": 1, "pixels_per_unit": 1000, "unit": "USD" }
+    }
+  ]
+}

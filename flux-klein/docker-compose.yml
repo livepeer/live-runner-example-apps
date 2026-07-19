@@ -1,0 +1,45 @@
+# Offchain demo: orchestrator + the self-hosted realtime FLUX Klein app,
+# attached as a STATIC runner via runners.json (-liveRunnerConfig), like vllm.
+# The orchestrator health-polls the app's /health and routes only once the FLUX
+# pipeline is loaded (warm-up-on-start). Requires an NVIDIA GPU (~13 GB VRAM).
+#
+#   docker compose up -d --build       # orchestrator + flux-klein app
+#   uv run client.py --webcam /dev/video0 --output - | ffplay -
+
+services:
+  orchestrator:
+    extends:
+      file: ../compose.orchestrator.yml
+      service: orchestrator
+    # `extends` can't append a single flag to `command`, so the command is
+    # restated here with -liveRunnerConfig added and runners.json mounted in.
+    command:
+      - -orchestrator
+      - -useLiveRunners
+      - -serviceAddr=127.0.0.1:8935
+      - -httpAddr=0.0.0.0:8935
+      - -liveRunnerAddr=https://orchestrator:8935
+      - -orchSecret=abcdef
+      - -network=offchain
+      - -monitor=false
+      - -liveRunnerConfig=/config/runners.json
+      - -v=6
+    volumes:
+      - ./runners.json:/config/runners.json:ro
+
+  app:
+    build: .
+    container_name: example_apps_flux_klein
+    # FLUX Klein needs an NVIDIA GPU; the HF weights cache lives in ./models so
+    # the ~15 GB download survives restarts.
+    gpus: all
+    volumes:
+      - ./models:/models
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    # Static runner: no registration flags — only the orchestrator URL, used for
+    # create_trickle_channels once a session starts.
+    command:
+      - --host=0.0.0.0
+      - --orchestrator=https://orchestrator:8935

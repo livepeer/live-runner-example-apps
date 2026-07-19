@@ -30,7 +30,7 @@ The orchestrator is a **transparent reverse proxy**: every endpoint you expose i
 
 - **HTTP** request/response — the common case. (`hello-world`, `tiles`)
 - **HTTP + SSE** — streamed / token responses. (`vllm`)
-- **Trickle** — continuous realtime video in/out. (`echo`)
+- **Trickle** — continuous realtime video in/out. (`echo`, `flux-klein`)
 - **WebSocket** — long-lived bidirectional sessions. (external: `scope`)
 
 Need a schema that isn't here? [Open an issue](https://github.com/livepeer/live-runner-example-apps/issues).
@@ -40,12 +40,13 @@ Need a schema that isn't here? [Open an issue](https://github.com/livepeer/live-
 
 ## Examples
 
-| Example                        | Goal                                            | Registration | Mode                               | Transport         |
-| ------------------------------ | ----------------------------------------------- | ------------ | ---------------------------------- | ----------------- |
-| [`hello-world`](./hello-world) | The simplest app: one request, one response     | dynamic      | persistent (single-shot by nature) | HTTP (JSON)       |
-| [`tiles`](./tiles)             | Capacity fan-out — one session per tile         | dynamic      | persistent (single-shot by nature) | HTTP (base64 PNG) |
-| [`echo`](./echo)               | Realtime video, transformed and echoed back     | dynamic      | persistent                         | trickle           |
-| [`vllm`](./vllm)               | Drop-in OpenAI API; the client stays unmodified | static       | persistent (single-shot by nature) | HTTP + SSE        |
+| Example                        | Goal                                               | Registration | Mode                               | Transport         |
+| ------------------------------ | -------------------------------------------------- | ------------ | ---------------------------------- | ----------------- |
+| [`hello-world`](./hello-world) | The simplest app: one request, one response        | dynamic      | persistent (single-shot by nature) | HTTP (JSON)       |
+| [`tiles`](./tiles)             | Capacity fan-out — one session per tile            | dynamic      | persistent (single-shot by nature) | HTTP (base64 PNG) |
+| [`echo`](./echo)               | Realtime video, transformed and echoed back        | dynamic      | persistent                         | trickle           |
+| [`vllm`](./vllm)               | Drop-in OpenAI API; the client stays unmodified    | static       | persistent (single-shot by nature) | HTTP + SSE        |
+| [`flux-klein`](./flux-klein)   | Realtime video diffusion, steered by a live prompt | static       | persistent                         | trickle           |
 
 Start with `hello-world` (the smallest end-to-end path); the others each layer on one new idea. More will follow, including a full example that exercises every feature. Each is self-contained and runs **offchain** (free, no wallet); most also run **on-chain** (paid) — see each README.
 
@@ -54,7 +55,7 @@ Start with `hello-world` (the smallest end-to-end path); the others each layer o
 How the app attaches to the orchestrator:
 
 - **Dynamic** — the app self-registers via the SDK (`register_runner`) and heartbeats; the orchestrator drops it when heartbeats stop. Best for apps that come and go. (`hello-world`, `echo`)
-- **Static** — the orchestrator is configured with the app's URL in a `runners.json` and health-polls it; the app needs no SDK. Best for fixed, long-running deployments. (`vllm`)
+- **Static** — the orchestrator is configured with the app's URL in a `runners.json` and health-polls it; the app needs no SDK. Best for fixed, long-running deployments. (`vllm`, `flux-klein`)
 
 The arrow flips — dynamic, the app announces itself; static, the orchestrator is told about a passive app:
 
@@ -74,7 +75,7 @@ flowchart LR
 
 Chosen _at_ registration (above); **defaults to `persistent`** — set on both `register_runner(...)` and in `runners.json`. The examples set it explicitly.
 
-- **Persistent** — a held-open session billed per second of wall-clock. Best for realtime / streaming. (`echo`)
+- **Persistent** — a held-open session billed per second of wall-clock. Best for realtime / streaming. (`echo`, `flux-klein`)
 - **Single-shot** — one request in, one response out. Best for batch / request-response. (`hello-world`, `vllm` are single-shot by nature.)
 
 > [!IMPORTANT]

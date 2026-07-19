@@ -1,0 +1,5 @@
+# Output written by client.py (MPEG-TS stream)
+flux-klein-out.ts
+
+# HF weights cache mounted into the container (~15 GB, downloaded on first boot)
+models/

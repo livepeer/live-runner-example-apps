@@ -1,0 +1,32 @@
+[project]
+name = "livepeer-flux-klein"
+version = "0.1.0"
+description = "Realtime FLUX.2-klein-4B app (new runner, trickle realtime video) for the Livepeer network."
+requires-python = ">=3.12"
+# Host-side deps only — enough to run client.py (and to import runner.py) with
+# `uv run`. The GPU inference stack that flux_klein.py needs (torch, diffusers,
+# transformers, accelerate, pillow, numpy) is deliberately NOT listed here: they
+# are multi-GB CUDA wheels pinned to a specific CUDA/driver combo, so `uv sync`
+# on a laptop would be enormous and would resolve to the wrong platform build.
+# The app only ever runs in the container, so they are installed in the
+# Dockerfile instead.
+dependencies = [
+    "av",               # client: decode the input file / webcam, publish frames
+    "aiohttp",          # runner: the /health /status /stats /stream /update app
+    "livepeer-gateway",
+]
+
+# livepeer-gateway is not on PyPI yet; pull it from a branch.
+#
+# NOTE: this example pins rs/live-runner-session-payments rather than the
+# ja/live-runner branch the other examples use. client.py calls
+# `session.start_payments()` and passes `payment_interval=` to `reserve_session`
+# to keep a long-lived streaming session funded for its whole duration; both
+# only exist on the payments branch (on ja/live-runner `LiveRunnerSession` is a
+# plain dataclass with no such method). Everything else this example uses
+# (`create_trickle_channels`, `MediaPublish`/`MediaPublishConfig`,
+# `VideoOutputConfig`, `MediaOutput`, `reserve_session`, `post_json`) exists on
+# both branches, so this pin can move to ja/live-runner once session payments
+# land there.
+[tool.uv.sources]
+livepeer-gateway = { git = "https://github.com/livepeer/livepeer-python-gateway", branch = "rs/live-runner-session-payments" }

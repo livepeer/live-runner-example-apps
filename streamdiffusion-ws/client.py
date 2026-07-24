@@ -1,18 +1,28 @@
 #!/usr/bin/env python3
-# Client for the reverse-proxied StreamDiffusion app.
-#
-# The contrast with the trickle examples (echo, streamdiffusion): the runner here
-# is daydream's StreamDiffusion realtime-img2img server, run UNMODIFIED. It speaks
-# no Livepeer protocol -- the orchestrator just reverse-proxies its native HTTP/WS
-# endpoints. So there is no runner.py / sd.py in this example; the app IS their
-# container, and this client drives its protocol through the proxied app_url:
-#   - WS  {app_url}/api/ws/{uuid}      input : control + JPEG frames
-#   - GET {app_url}/api/stream/{uuid}  output: MJPEG (opening it also drives the
-#                                              server's per-frame "send_frame" pump)
-#   - POST {app_url}/api/blending      set the prompt (not a per-frame field here)
-#
-# Input JPEGs are read as an MJPEG stream on stdin (pipe ffmpeg); the diffused MJPEG
-# is written to stdout (pipe to a player). Offchain/free by default.
+"""streamdiffusion-ws client: drive the reverse-proxied StreamDiffusion app.
+
+The contrast with the trickle examples (echo, streamdiffusion): the runner here
+is daydream's StreamDiffusion realtime-img2img server, run UNMODIFIED. It speaks
+no Livepeer protocol — the orchestrator just reverse-proxies its native HTTP/WS
+endpoints. So there is no runner.py / sd.py in this example; the app IS their
+container, and this client drives its protocol through the proxied app_url:
+  - WS  {app_url}/api/ws/{uuid}      input : control + JPEG frames
+  - GET {app_url}/api/stream/{uuid}  output: MJPEG (opening it also drives the
+                                             server's per-frame "send_frame" pump)
+  - POST {app_url}/api/blending      set the prompt (not a per-frame field here)
+
+By default the prompt **auto-cycles** every --prompt-interval seconds from a
+curated, SFW bank (prompts.py) — a hands-free art-style slideshow. Pass --prompt
+to pin one instead.
+
+Livepeer integration (grep `# Livepeer:`):
+  1. reserve_session()   — discover the runner, reserve a (paid) session
+  2. ws_connect()        — drive the app's native WS + MJPEG through the proxied app_url
+  3. session.aclose()    — end the session (stops payments)
+
+Input JPEGs are read as an MJPEG stream on stdin (pipe ffmpeg); the diffused MJPEG
+is written to stdout (pipe to a player). Offchain/free by default.
+"""
 from __future__ import annotations
 
 import argparse
@@ -24,13 +34,12 @@ from contextlib import suppress
 
 import aiohttp
 
+import prompts
 from livepeer_gateway.errors import LivepeerGatewayError
-from livepeer_gateway.http import post_json
 from livepeer_gateway.selection import reserve_session
 
 DEFAULT_DISCOVERY = "http://localhost:8935/discovery"
 APP_ID = "livepeer-sample/streamdiffusion-ws"
-DEFAULT_PROMPT = "a psychedelic landscape, vivid colors, intricate details"
 # Per-frame params the app keeps (prompt/seed/steps are set over REST, not per frame).
 FRAME_PARAMS = {"resolution": "512x512 (1:1)", "width": 512, "height": 512}
 SOI, EOI = b"\xff\xd8", b"\xff\xd9"  # JPEG start/end-of-image markers
@@ -42,7 +51,8 @@ def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Run video through the reverse-proxied StreamDiffusion app.")
     p.add_argument("input", help="- to read an MJPEG stream from stdin (pipe ffmpeg's image2pipe/mjpeg)")
     p.add_argument("--discovery", default=DEFAULT_DISCOVERY)
-    p.add_argument("--prompt", default=DEFAULT_PROMPT)
+    p.add_argument("--prompt", default="", help="Pin a fixed prompt (disables auto-cycling).")
+    p.add_argument("--prompt-interval", type=float, default=60.0, help="Seconds between auto-prompt changes.")
     p.add_argument("--output", default="-", help="output MJPEG file, or - for stdout (pipe to ffplay -f mjpeg)")
     p.add_argument("--signer", default="", help="remote signer URL; omit for the offchain (free) path")
     p.add_argument("--payment-interval", type=float, default=3.0)
@@ -86,6 +96,21 @@ async def _pump_input(reader: asyncio.StreamReader, state: dict) -> None:
     state["eof"] = True
 
 
+async def _set_prompt(http: aiohttp.ClientSession, base: str, prompt: str) -> None:
+    with suppress(Exception):
+        await http.post(f"{base}/api/blending", json={"prompt_list": [[prompt, 1.0]]})
+        log.info("prompt -> %r", prompt)
+
+
+async def _cycle_prompts(http: aiohttp.ClientSession, base: str, interval: float) -> None:
+    # Hands-free art-style slideshow: rotate through the curated SFW bank.
+    prev = None
+    while True:
+        await asyncio.sleep(interval)
+        prev = prompts.random_prompt(prev)
+        await _set_prompt(http, base, prev)
+
+
 async def _publish(ws: aiohttp.ClientWebSocketResponse, state: dict) -> None:
     # The server drives the cadence: each "send_frame" it sends (from the output
     # stream's pump) we answer with {"status":"next_frame"} -> params -> the latest
@@ -122,6 +147,9 @@ async def main() -> None:
     if args.input.strip() != "-":
         raise SystemExit("this example reads an MJPEG stream on stdin; pass - as the input")
 
+    auto = not args.prompt.strip()
+    first_prompt = args.prompt.strip() or prompts.random_prompt()
+
     output_stdout = args.output.strip() in {"-", "stdout"}
     fh = sys.stdout.buffer if output_stdout else open(args.output, "wb")
 
@@ -132,7 +160,7 @@ async def main() -> None:
 
     session = None
     try:
-        session = await reserve_session(
+        session = await reserve_session(  # Livepeer: 1
             discovery_url=args.discovery,
             app=APP_ID,
             signer_url=args.signer.strip() or None,
@@ -146,13 +174,13 @@ async def main() -> None:
         # ssl=False: the orchestrator proxy uses a self-signed cert on localhost.
         connector = aiohttp.TCPConnector(ssl=False)
         async with aiohttp.ClientSession(connector=connector) as http:
-            with suppress(Exception):
-                await http.post(f"{base}/api/blending", json={"prompt_list": [[args.prompt, 1.0]]})
-                log.info("prompt set: %r", args.prompt)
+            await _set_prompt(http, base, first_prompt)
+            log.info("auto-cycling every %ss" % args.prompt_interval if auto else "prompt pinned")
 
             # Connect the WS up front (surfaces a failure immediately), then run the
-            # input pump, the output-stream reader, and the frame publisher together.
-            ws = await http.ws_connect(f"{base}/api/ws/{uid}", max_msg_size=0)
+            # input pump, the output-stream reader, the frame publisher, and (auto)
+            # the prompt cycler together.
+            ws = await http.ws_connect(f"{base}/api/ws/{uid}", max_msg_size=0)  # Livepeer: 2
             log.info("ws connected")
             state: dict = {"latest": None, "eof": False}
             reader = await _stdin_reader()
@@ -161,6 +189,8 @@ async def main() -> None:
                 asyncio.create_task(_read_output(http, base, uid, write)),
                 asyncio.create_task(_publish(ws, state)),
             ]
+            if auto:
+                workers.append(asyncio.create_task(_cycle_prompts(http, base, args.prompt_interval)))
             try:
                 await pump  # runs until the input stream (stdin) hits EOF
             finally:
@@ -176,7 +206,7 @@ async def main() -> None:
             fh.close()
         if session is not None:
             with suppress(Exception):
-                await session.aclose()
+                await session.aclose()  # Livepeer: 3
 
 
 if __name__ == "__main__":

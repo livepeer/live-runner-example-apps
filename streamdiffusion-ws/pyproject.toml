@@ -8,6 +8,7 @@ dependencies = [
     "livepeer-gateway",
 ]
 
-# livepeer-gateway is not on PyPI yet; pull it from the branch (matches the other examples).
+# This example drives a metered session (start_payments / payment_interval / aclose),
+# which lives on the SDK's session-payments branch — not ja/live-runner yet.
 [tool.uv.sources]
 livepeer-gateway = { git = "https://github.com/livepeer/livepeer-python-gateway", branch = "rs/live-runner-session-payments" }

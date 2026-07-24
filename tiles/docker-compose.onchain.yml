@@ -31,5 +31,4 @@ services:
       - --orchSecret=abcdef
       - --runner-url=http://app:8989
       - --capacity=${CAPACITY:-4}
-      - --price=${PRICE_PER_UNIT}
-      - --pixels-per-unit=${PIXELS_PER_UNIT}
+      - --price=${PRICE}

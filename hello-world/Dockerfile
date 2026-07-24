@@ -9,8 +9,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # livepeer-gateway SDK isn't on PyPI yet; install from Git.
+ARG SDK_REF=ja/live-runner
+ADD "https://api.github.com/repos/livepeer/livepeer-python-gateway/commits/${SDK_REF}" /tmp/sdk-ref.json
 RUN pip install --no-cache-dir \
-    "livepeer-gateway @ git+https://github.com/livepeer/livepeer-python-gateway@ja/live-runner"
+    "livepeer-gateway @ git+https://github.com/livepeer/livepeer-python-gateway@${SDK_REF}"
 
 WORKDIR /app
 COPY runner.py client.py ./

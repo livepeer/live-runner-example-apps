@@ -131,11 +131,8 @@ On-chain runs add a **remote signer** that holds the payer wallet and mints [pro
 
 - **Wallets stay outside the repo** — `*_KEYSTORE_DIR` points at go-livepeer keystores (mounted read-only); only the address + password come from `.env`.
 - **`.env` is per example and gitignored** — copy `.env.example` and fill in RPC, network, keystore paths, accounts, and pricing (it holds the keystore password).
-- **Pricing is USD → wei**: `PRICE_PER_UNIT` (whole USD) per `PIXELS_PER_UNIT`. Keep `PIXELS_PER_UNIT` small — large values floor the per-unit price to 0 (free). Signer caps at `MAX_PRICE_PER_UNIT`.
+- **Runner price is decimal USD per hour**: the app advertises `PRICE` (e.g. `0.01`); `currency` and `unit` default to `usd` / `hour`, so only `price` is required. The orchestrator converts it to wei per second via the price feed. The signer caps what it will pay at `MAX_PRICE_PER_UNIT`.
 - **Payments are probabilistic** — on a short run you'll rarely see a redemption; that's expected.
-
-> [!NOTE]
-> The `pixels` / `PIXELS_PER_UNIT` naming is legacy (from video transcoding) and is being removed — see [go-livepeer#3942](https://github.com/livepeer/go-livepeer/pull/3942).
 
 ### Verifying discovery
 
@@ -145,7 +142,7 @@ Before running a client, confirm the orchestrator actually advertises your runne
 curl -sk https://localhost:8935/discovery | jq
 ```
 
-Each entry lists its `runners` with an `app`, `version`, capacity, and `price_info` (`price_per_unit` / `pixels_per_unit` in WEI). Check that your app appears and that the price matches what you configured — a `price_per_unit` of `0` means it floored to free (see the `PIXELS_PER_UNIT` note above).
+Each entry lists its `runners` with an `app`, `version`, capacity, and `price_info`. The orchestrator republishes your USD/hour price converted to wei — `price` in wei with `currency: wei` and `unit: seconds` (or `720p-pixel-seconds` for per-pixel video). Check that your app appears and the price is non-zero.
 
 ### Conventions
 

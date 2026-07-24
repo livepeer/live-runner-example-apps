@@ -29,5 +29,4 @@ services:
       - --orchestrator=https://orchestrator:8935
       - --orchSecret=abcdef
       - --runner-url=http://app:8989
-      - --price=${PRICE_PER_UNIT}
-      - --pixels-per-unit=${PIXELS_PER_UNIT}
+      - --price=${PRICE}

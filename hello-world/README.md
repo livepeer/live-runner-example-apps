@@ -45,7 +45,7 @@ uv run client.py --name livepeer \
 docker compose -f docker-compose.yml -f docker-compose.onchain.yml down
 ```
 
-The app registers with a price (`--price` / `--pixels-per-unit` from `.env`) and the orchestrator advertises it in `/discovery`. The SDK client does discovery, the session, the `/hello` call, and payment itself — paying through the remote signer with **no gateway in between**. So this is the full paid stack end to end: **app + orchestrator + remote signer + SDK client**.
+The app registers with a price (`--price` in USD/hour from `.env`) and the orchestrator advertises it in `/discovery`. The SDK client does discovery, the session, the `/hello` call, and payment itself — paying through the remote signer with **no gateway in between**. So this is the full paid stack end to end: **app + orchestrator + remote signer + SDK client**.
 
 ## Run without Docker
 

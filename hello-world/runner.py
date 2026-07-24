@@ -36,15 +36,9 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--price",
-        type=int,
+        type=float,
         default=0,
-        help="Price in USD per pixels-per-unit (0 = free, the offchain default).",
-    )
-    parser.add_argument(
-        "--pixels-per-unit",
-        type=int,
-        default=1,
-        help="Scale factor: price is charged per this many units.",
+        help="Runner price in USD per hour (0 = free, the offchain default).",
     )
     return parser.parse_args()
 
@@ -70,8 +64,7 @@ def main() -> None:
             # single-shot by nature; stays persistent until single-shot payment lands
             # (go-livepeer#3955)
             mode="persistent",
-            price_per_unit=args.price,
-            pixels_per_unit=args.pixels_per_unit,
+            price=args.price,  # decimal USD/hour
         )
         log.info(
             "registered runner_id=%s orchestrator=%s",

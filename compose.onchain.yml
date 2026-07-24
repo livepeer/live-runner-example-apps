@@ -24,9 +24,6 @@ services:
       - -ethPassword=${SIGNER_ETH_PASSWORD}
       - -httpAddr=0.0.0.0:7936
       - -maxPricePerUnit=${MAX_PRICE_PER_UNIT}
-      - -pixelsPerUnit=${PIXELS_PER_UNIT}
-      # Cap per-win payout so redemptions stay cheap and frequent
-      - -maxFaceValue=10000000000000
       - -v=6
       # Local demo only: skips signer caller-auth (it binds to 0.0.0.0 and signs
       # for any caller). In production, authorize callers via -remoteSignerWebhookUrl.
@@ -53,9 +50,14 @@ services:
       # Price comes from the app's registration; -pricePerUnit only sets the
       # unused legacy base price, but an on-chain O won't boot without it.
       - -pricePerUnit=0
-      # EV per ticket (not the price). The default (8e9) is too small here and
-      # trips the 100-tickets-per-payment cap; raise it to keep ~10 tickets.
-      - -ticketEV=1000000000000
+      # EV per ticket (recipient side): numTickets = ceil(fee / ticketEV), capped
+      # at 100/payment. It's ALSO the min faceValue a ticket needs, so it must
+      # stay under the signer's per-recipient reserve float or session setup fails
+      # with "insufficient sender reserve". At 0.01 USD/hour a 10s live payment is
+      # ~1.4e10 wei; 1e9 keeps it to ~15 tickets with a tiny faceValue. Read on
+      # the orchestrator (recipient), NOT the signer.
+      - -ticketEV=1000000000
+      - -maxFaceValue=10000000000000
       - -monitor=false
       - -v=6
     volumes:

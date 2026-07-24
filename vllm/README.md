@@ -8,9 +8,9 @@ Runs an OpenAI-compatible LLM on the Livepeer network and consumes it with the *
 | Runner mode  | persistent (single-shot by nature)         |
 | Registration | static (orchestrator config + health poll) |
 | Transport    | HTTP + SSE (OpenAI `/v1/chat/completions`) |
-| Port         | 8000 (vLLM), 8080 (gateway)                |
+| Port         | 8000 (vLLM), 18080 (gateway)               |
 
-**Requires an NVIDIA GPU** for vLLM. The default model (`Qwen/Qwen2.5-0.5B-Instruct`) is tiny so it fits a modest card can be overridden with `VLLM_MODEL`. Prerequisites (Docker, `uv`, the not-yet-released SDK) and the shared on-chain/payment setup are in the [repo README](../README.md).
+**Requires an NVIDIA GPU** for vLLM. The default model (`Qwen/Qwen2.5-0.5B-Instruct`) is tiny so it fits a modest card; override with `VLLM_MODEL`. The default image tag (`v0.9.2`) targets **CUDA 12.8** hosts; `vllm/vllm-openai:latest` needs **CUDA 13+** (set `VLLM_IMAGE` in `.env` to override). Prerequisites (Docker, `uv`, the not-yet-released SDK) and the shared on-chain/payment setup are in the [repo README](../README.md).
 
 > [!NOTE]
 > This app is single-shot by nature but currently registers as **persistent**. It will switch to **single-shot** once [#5](https://github.com/livepeer/live-runner-example-apps/issues/5) lands.
@@ -22,7 +22,7 @@ vLLM is a **static runner**: the orchestrator reads `runners.json` via `-liveRun
 Two sides:
 
 - **Network (compose):** the `orchestrator` (configured with `runners.json`) + the official `vllm` image. The on-chain overlay adds a `signer`.
-- **Consumer (host):** the local gateway (`gateway.py`) — an OpenAI endpoint on `:8080` that discovers the runner and (on-chain) pays via the signer — plus any OpenAI client (`client.py`, another SDK, `curl`).
+- **Consumer (host):** the local gateway (`gateway.py`) — an OpenAI endpoint on `:18080` by default (`GATEWAY_PORT` / `--port`; avoids `:8080` used by PymtHouse signer) — plus any OpenAI client (`client.py`, another SDK, `curl`).
 
 The local gateway is a _client-side_ component, so it runs on the host like the client, not in the infra compose.
 
@@ -33,15 +33,15 @@ The gateway is the **only** Livepeer-aware piece in the whole path — and it's 
 ```sh
 docker compose up -d                   # pulls the vLLM + orchestrator images (slow first time)
 curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # confirm vllm/qwen2.5-0.5b-instruct registered
-uv run gateway.py &                    # OpenAI endpoint on http://localhost:8080/v1
+uv run gateway.py &                    # OpenAI endpoint on http://localhost:18080/v1
 uv run client.py --prompt "In one sentence, what is Livepeer?"
 kill %1; docker compose down           # stop the gateway, then the stack
 ```
 
-`client.py` is stock `openai` with `base_url=http://localhost:8080/v1` (the `api_key` is ignored — it just needs _a_ value). Pass a `--model` that matches `VLLM_MODEL`, the name vLLM serves under. Any OpenAI tool works the same way — e.g. `curl`:
+`client.py` is stock `openai` with `base_url=http://localhost:18080/v1` (the `api_key` is ignored — it just needs _a_ value). Pass a `--model` that matches `VLLM_MODEL`, the name vLLM serves under. Override the port with `GATEWAY_PORT` or `--port` / `--base-url`. Any OpenAI tool works the same way — e.g. `curl`:
 
 ```sh
-curl http://localhost:8080/v1/chat/completions \
+curl http://localhost:18080/v1/chat/completions \
   -d '{"model":"Qwen/Qwen2.5-0.5B-Instruct","messages":[{"role":"user","content":"hi"}]}'
 ```
 
@@ -59,7 +59,7 @@ uv run client.py --stream --prompt "write a haiku about GPUs"   # prints tokens 
 Or watch the raw SSE frames with `curl -N` (disables curl buffering):
 
 ```sh
-curl -N http://localhost:8080/v1/chat/completions \
+curl -N http://localhost:18080/v1/chat/completions \
   -d '{"model":"Qwen/Qwen2.5-0.5B-Instruct","stream":true,"messages":[{"role":"user","content":"hi"}]}'
 # data: {...}\n data: {...}\n ... data: [DONE]
 ```
@@ -71,9 +71,9 @@ Layer `docker-compose.onchain.yml` to add a remote signer and run the orchestrat
 ```sh
 cp .env.example .env   # fill in RPC, network, keystore paths, accounts
 docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d
-uv run gateway.py --signer http://localhost:7936 &     # gateway pays per request
+uv run gateway.py --signer http://localhost:7936 --api-key "$API_KEY" &     # gateway pays per request
 uv run client.py --prompt "In one sentence, what is Livepeer?"
 kill %1; docker compose -f docker-compose.yml -f docker-compose.onchain.yml down
 ```
 
-The client is **unchanged** — only the gateway gets `--signer`; it pays per call through the remote signer, so the consumer never sees discovery or payment. The price is set in `runners.json` (see the comments in `.env.example`).
+The client is **unchanged** — only the gateway gets `--signer` and optional `--api-key` (passed as `Authorization: Bearer` / `signer_headers` to the SDK); it pays per call through the remote signer, so the consumer never sees discovery or payment. The price is set in `runners.json` (see the comments in `.env.example`).

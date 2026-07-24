@@ -7,7 +7,7 @@ doing Livepeer's discovery + payment handshake behind the scenes. Point ANY Open
 client at it -- no code changes, any language -- and it works on-chain:
 
     uv run gateway.py --signer http://localhost:7936 &
-    export OPENAI_BASE_URL=http://localhost:8080/v1 OPENAI_API_KEY=unused
+    export OPENAI_BASE_URL=http://localhost:18080/v1 OPENAI_API_KEY=unused
     # then plain `openai`, curl, or any SDK just works
 
 Each request: reserve a session, forward the body, release the session. call_runner does
@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 from contextlib import suppress
 
 from aiohttp import web
@@ -42,6 +43,8 @@ from livepeer_gateway.live_runner import call_runner, stop_runner_session
 from livepeer_gateway.selection import reserve_session
 
 APP_ID = "vllm/qwen2.5-0.5b-instruct"
+# Avoid :8080 — commonly used by PymtHouse / remote signer locally.
+DEFAULT_GATEWAY_PORT = int(os.environ.get("GATEWAY_PORT", "18080"))
 
 log = logging.getLogger("vllm-gateway")
 
@@ -56,8 +59,13 @@ def _parse_args() -> argparse.Namespace:
         default="",
         help="Remote signer base URL; omit for the offchain (free) path.",
     )
+    parser.add_argument(
+        "--api-key",
+        default="",
+        help="Bearer credential for the signer (Authorization header).",
+    )
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument("--port", type=int, default=DEFAULT_GATEWAY_PORT)
     return parser.parse_args()
 
 
@@ -67,12 +75,18 @@ def main() -> None:
     )
     args = _parse_args()
     signer_url = args.signer.strip() or None
+    signer_headers = None
+    if args.api_key.strip():
+        signer_headers = {"Authorization": f"Bearer {args.api_key.strip()}"}
 
     async def _forward(request: web.Request) -> web.StreamResponse:
         payload = await request.json()
         runner_path = request.path  # e.g. /v1/chat/completions
         session = await reserve_session(
-            discovery_url=args.discovery, app=APP_ID, signer_url=signer_url
+            discovery_url=args.discovery,
+            app=APP_ID,
+            signer_url=signer_url,
+            signer_headers=signer_headers,
         )  # Livepeer: 1
 
         try:
@@ -86,6 +100,7 @@ def main() -> None:
                     runner_url=runner_url,
                     payload=payload,
                     signer_url=signer_url,
+                    signer_headers=signer_headers,
                     stream=True,
                 ) as stream:
                     resp = web.StreamResponse(
@@ -103,7 +118,10 @@ def main() -> None:
                     return resp
 
             result = await call_runner(
-                runner_url=runner_url, payload=payload, signer_url=signer_url
+                runner_url=runner_url,
+                payload=payload,
+                signer_url=signer_url,
+                signer_headers=signer_headers,
             )  # Livepeer: 2
             return web.json_response(result.data)
         finally:
@@ -113,11 +131,12 @@ def main() -> None:
     app = web.Application()
     app.router.add_post("/v1/{tail:.*}", _forward)  # forward every OpenAI path
     log.info(
-        "gateway on http://%s:%d/v1 -> %s (signer=%s)",
+        "gateway on http://%s:%d/v1 -> %s (signer=%s api_key=%s)",
         args.host,
         args.port,
         args.discovery,
         signer_url or "none",
+        "set" if signer_headers else "none",
     )
     web.run_app(app, host=args.host, port=args.port, print=None)
 

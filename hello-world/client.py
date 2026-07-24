@@ -34,6 +34,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--signer", default="", help="Remote signer base URL (on-chain/paid path)."
     )
+    parser.add_argument(
+        "--api-key",
+        default="",
+        help="Bearer credential for the signer (Authorization header).",
+    )
     return parser.parse_args()
 
 
@@ -43,12 +48,16 @@ async def main() -> None:
     )
     args = _parse_args()
     signer_url = args.signer.strip() or None
+    signer_headers = None
+    if args.api_key.strip():
+        signer_headers = {"Authorization": f"Bearer {args.api_key.strip()}"}
     session = None
     try:
         session = await reserve_session(  # Livepeer: 1 (to be removed once #4 lands)
             discovery_url=args.discovery,
             app=APP_ID,
             signer_url=signer_url,
+            signer_headers=signer_headers,
         )
         log.info("session_id=%s app_url=%s", session.session_id, session.app_url)
 
@@ -56,6 +65,7 @@ async def main() -> None:
             runner_url=session.app_url.rstrip("/") + "/hello",
             payload={"name": args.name},
             signer_url=signer_url,
+            signer_headers=signer_headers,
         )
         print(result.data)
     except LivepeerGatewayError as exc:

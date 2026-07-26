@@ -131,7 +131,7 @@ On-chain runs add a **remote signer** that holds the payer wallet and mints [pro
 
 - **Wallets stay outside the repo** — `*_KEYSTORE_DIR` points at go-livepeer keystores (mounted read-only); only the address + password come from `.env`.
 - **`.env` is per example and gitignored** — copy `.env.example` and fill in RPC, network, keystore paths, accounts, and pricing (it holds the keystore password).
-- **Runner price is decimal USD per hour**: the app advertises `PRICE` (e.g. `0.01`); `currency` and `unit` default to `usd` / `hour`, so only `price` is required. The orchestrator converts it to wei per second via the price feed. The signer caps what it will pay at `MAX_PRICE_PER_UNIT`.
+- **Runner price is decimal USD per hour**: the app advertises `PRICE` (e.g. `0.01`); `currency` and `unit` default to `usd` / `hour`, so only `price` is required. The orchestrator converts it to wei per second via the price feed. The signer caps what it will pay at `MAX_PRICE_PER_UNIT`, which is priced per **second** of runtime (0.000111USD is about 0.40 USD/hour).
 - **Payments are probabilistic** — on a short run you'll rarely see a redemption; that's expected.
 
 ### Verifying discovery

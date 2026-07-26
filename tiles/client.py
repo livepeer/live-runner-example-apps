@@ -92,18 +92,29 @@ def _split(
 
 
 async def _reserve_with_retry(
-    *, discovery_url: str, signer_url: str | None, deadline: float
+    *, r: int, c: int, discovery_url: str, signer_url: str | None, deadline: float
 ) -> LiveRunnerSession:
     # A full runner refuses the reserve; wait for a slot instead of failing the tile.
     cap = 0.25
+    waiting = False
     while True:
         try:
             return await reserve_session(
                 discovery_url=discovery_url, app=APP_ID, signer_url=signer_url
             )  # Livepeer: 1
-        except (NoRunnerAvailableError, NoOrchestratorAvailableError):
+        except (NoRunnerAvailableError, NoOrchestratorAvailableError) as exc:
             if time.monotonic() >= deadline:
                 raise
+            if not waiting:
+                # Expected while the runner is at capacity, but the reason also
+                # surfaces a runner that is down before the timeout ends the wait.
+                log.warning(
+                    "tile (%d,%d) no slot yet, retrying until --reserve-timeout: %s",
+                    r,
+                    c,
+                    exc,
+                )
+                waiting = True
             # Full jitter: sleep a random slice of the (growing) window so many
             # tiles retrying at once spread out instead of stampeding in lockstep.
             await asyncio.sleep(random.uniform(0, cap))
@@ -131,7 +142,11 @@ async def _process_tile(
     try:
         # Reserve a slot (waits out capacity), then run the tile through the runner.
         session = await _reserve_with_retry(
-            discovery_url=discovery_url, signer_url=signer_url, deadline=deadline
+            r=r,
+            c=c,
+            discovery_url=discovery_url,
+            signer_url=signer_url,
+            deadline=deadline,
         )
         log.info("tile (%d,%d) reserved (+%.1fs)", r, c, time.monotonic() - t0)
         result = await call_runner(  # Livepeer: 2

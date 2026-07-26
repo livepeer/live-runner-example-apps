@@ -92,15 +92,15 @@ uv run client.py --webcam-macos 0 --fps 10 \
 
 ## Run on-chain (paid)
 
-Layer `docker-compose.onchain.yml` to add the shared remote signer and re-point the orchestrator on-chain. The price is already in `runners.json`, so unlike the dynamic examples there's no `--price` on the app. This needs an Ethereum RPC, a funded signer wallet and an orchestrator wallet — see [On-chain (paid) setup](../README.md#on-chain-paid-setup) in the repo README.
+Layer `compose.onchain.yml` to add the shared remote signer and re-point the orchestrator on-chain. The price is already in `runners.json`, so unlike the dynamic examples there's no `--price` on the app. This needs an Ethereum RPC, a funded signer wallet and an orchestrator wallet — see [On-chain (paid) setup](../README.md#on-chain-paid-setup) in the repo README.
 
 ```sh
 cp .env.example .env       # fill in RPC, network, keystore paths, accounts, pricing
-docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d --build
+docker compose -f compose.yml -f compose.onchain.yml up -d --build
 uv run client.py --webcam /dev/video0 \
   --discovery https://localhost:8935/discovery \
   --signer http://localhost:7936 --output out.ts
-docker compose -f docker-compose.yml -f docker-compose.onchain.yml down
+docker compose -f compose.yml -f compose.onchain.yml down
 ```
 
 Keep `PIXELS_PER_UNIT` small — if it's too large the per-unit price floors to 0 wei and calls are effectively free despite being on-chain.

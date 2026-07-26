@@ -1,7 +1,7 @@
 # Shared on-chain payment services: remote signer + on-chain orchestrator.
-# Pulled into each example's docker-compose.onchain.yml via `extends` and
+# Pulled into each example's compose.onchain.yml via `extends` and
 # layered on the offchain base:
-#   docker compose -f docker-compose.yml -f docker-compose.onchain.yml up
+#   docker compose -f compose.yml -f compose.onchain.yml up
 #
 # signer: standalone `-remoteSigner` holding the funded payer wallet, mints
 #   tickets (cannot run offchain). The SDK client pays via --signer.
@@ -57,7 +57,13 @@ services:
       # ~1.4e10 wei; 1e9 keeps it to ~15 tickets with a tiny faceValue. Read on
       # the orchestrator (recipient), NOT the signer.
       - -ticketEV=1000000000
-      - -maxFaceValue=10000000000000
+      # faceValue must also cover the redemption tx cost: redeemGas (1.2M on
+      # Arbitrum) x max(current gas, 3 gwei hardcoded avg) = 3.6e15 wei. A
+      # -maxFaceValue below that makes the orch reject every session with
+      # "insufficient sender reserve" no matter how large the reserve is.
+      # 4e15 (0.004 ETH) clears it with headroom; the signer's reserve float
+      # (reserve / orch pool size) still caps the actual faceValue.
+      - -maxFaceValue=4000000000000000
       - -monitor=false
       - -v=6
     volumes:

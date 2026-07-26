@@ -13,7 +13,7 @@
 
 services:
   orchestrator:
-    image: livepeer/go-livepeer:ja-live-runner
+    image: livepeer/go-livepeer:v0.9.0
     container_name: example_apps_orchestrator
     # Two distinct addresses:
     #   serviceAddr    advertised to external clients in discovery responses,

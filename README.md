@@ -131,7 +131,7 @@ On-chain runs add a **remote signer** that holds the payer wallet and mints [pro
 
 - **Wallets stay outside the repo** — `*_KEYSTORE_DIR` points at go-livepeer keystores (mounted read-only); only the address + password come from `.env`.
 - **`.env` is per example and gitignored** — copy `.env.example` and fill in RPC, network, keystore paths, accounts, and pricing (it holds the keystore password).
-- **Runner price is USD per hour**: the app advertises `PRICE` as a plain dollar amount (e.g. `0.01`); `currency` and `unit` default to `usd` / `hour`, so only `price` is required. The orchestrator converts it to wei per second via the price feed. The signer caps what it will pay at `MAX_PRICE_PER_UNIT`, applied per **second** of runtime (0.000111USD is about 0.40 USD/hour).
+- **Runner price is USD per hour**: the app advertises `PRICE` as a plain dollar amount (e.g. `0.01`); `currency` and `unit` default to `usd` / `hour`, so only `price` is required. The orchestrator converts it to wei per second via the price feed and meters the session per second. Apps with bounded per-call work can register `unit="fixed"` instead to bill the price once per session (see tiles). The signer caps what it will pay at `MAX_PRICE_PER_UNIT`, compared per billing unit: one second of runtime for metered apps (0.000111USD is about 0.40 USD/hour), the whole session price for fixed-price apps.
 - **Payments are probabilistic** — on a short run you'll rarely see a redemption; that's expected.
 
 ### Verifying discovery

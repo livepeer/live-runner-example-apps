@@ -46,19 +46,19 @@ uv run client.py sample.png --discovery https://localhost:8935/discovery        
 docker compose down
 ```
 
-`docker-compose.yml` brings up an orchestrator (`-useLiveRunners`) and the app; `CAPACITY` (default 4) sets the runner's advertised capacity. The client splits `sample.png` into a 3×3 grid (`--grid N` to change), processes every tile through the orchestrator, and writes `tiles-out.png`. Watch the client log: at `capacity=1` the `reserved` lines appear one at a time; at `capacity=9` they land together.
+`compose.yml` brings up an orchestrator (`-useLiveRunners`) and the app; `CAPACITY` (default 4) sets the runner's advertised capacity. The client splits `sample.png` into a 3×3 grid (`--grid N` to change), processes every tile through the orchestrator, and writes `tiles-out.png`. Watch the client log: at `capacity=1` the `reserved` lines appear one at a time; at `capacity=9` they land together.
 
 ## Run on-chain (paid)
 
-Layer `docker-compose.onchain.yml` to add a remote signer and run the orchestrator on-chain, so each tile call is paid through the signer. This needs an Ethereum RPC, a funded signer wallet (deposit + reserve), and an orchestrator wallet — see [On-chain (paid) setup](../README.md#on-chain-paid-setup) in the repo README.
+Layer `compose.onchain.yml` to add a remote signer and run the orchestrator on-chain, so each tile call is paid through the signer. This needs an Ethereum RPC, a funded signer wallet (deposit + reserve), and an orchestrator wallet — see [On-chain (paid) setup](../README.md#on-chain-paid-setup) in the repo README.
 
 ```sh
 cp .env.example .env   # fill in RPC, network, keystore paths, accounts, pricing
-CAPACITY=9 docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d --build
+CAPACITY=9 docker compose -f compose.yml -f compose.onchain.yml up -d --build
 uv run client.py sample.png \
   --discovery https://localhost:8935/discovery \
   --signer http://localhost:7936
-docker compose -f docker-compose.yml -f docker-compose.onchain.yml down
+docker compose -f compose.yml -f compose.onchain.yml down
 ```
 
 Each tile is its own reserve → pay → call → release, so a paid run mints a payment per tile. Keep the grid small on-chain.

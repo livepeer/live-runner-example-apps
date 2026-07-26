@@ -29,20 +29,20 @@ uv run client.py --name livepeer --discovery https://localhost:8935/discovery
 docker compose down
 ```
 
-`docker-compose.yml` brings up an orchestrator (`-useLiveRunners`) and the app; the commands above run the client against it.
+`compose.yml` brings up an orchestrator (`-useLiveRunners`) and the app; the commands above run the client against it.
 
 ## Run on-chain (paid)
 
-Layer `docker-compose.onchain.yml` to add a remote signer and run the orchestrator on-chain, so the app advertises a price and the SDK pays per call. This needs an Ethereum RPC, a funded signer wallet (deposit + reserve), and an orchestrator wallet — see [On-chain (paid) setup](../README.md#on-chain-paid-setup) in the repo README.
+Layer `compose.onchain.yml` to add a remote signer and run the orchestrator on-chain, so the app advertises a price and the SDK pays per call. This needs an Ethereum RPC, a funded signer wallet (deposit + reserve), and an orchestrator wallet — see [On-chain (paid) setup](../README.md#on-chain-paid-setup) in the repo README.
 
 ```sh
 cp .env.example .env   # fill in RPC, network, keystore paths, accounts, pricing
-docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d --build
+docker compose -f compose.yml -f compose.onchain.yml up -d --build
 uv run client.py --name livepeer \
   --discovery https://localhost:8935/discovery \
   --signer http://localhost:7936
 # {'message': 'Hello, livepeer!'}
-docker compose -f docker-compose.yml -f docker-compose.onchain.yml down
+docker compose -f compose.yml -f compose.onchain.yml down
 ```
 
 The app registers with a price (`--price` in USD/hour from `.env`) and the orchestrator advertises it in `/discovery`. The SDK client does discovery, the session, the `/hello` call, and payment itself — paying through the remote signer with **no gateway in between**. So this is the full paid stack end to end: **app + orchestrator + remote signer + SDK client**.

@@ -77,3 +77,5 @@ kill %1; docker compose -f compose.yml -f compose.onchain.yml down
 ```
 
 The client is **unchanged** — only the gateway gets `--signer`; it pays per call through the remote signer, so the consumer never sees discovery or payment. The price is set in `runners.json` (see the comments in `.env.example`).
+
+Pricing note: the orchestrator meters compute per **second**, not per token. Probabilistic payments are made up front, so token counts can't drive protocol pricing. Per-token billing is left to the signer/gateway layer, which sees `usage` in every response and can bill users per token while paying the orchestrator per second.

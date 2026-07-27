@@ -110,7 +110,7 @@ Each example is self-contained and its README has the run commands. Everything b
 
 ### Prerequisites
 
-- **Docker** for the end-to-end demos. They use the `livepeer/go-livepeer:ja-live-runner` image, so there is nothing to build.
+- **Docker** for the end-to-end demos. They use the mainline `livepeer/go-livepeer:v0.9.0` release image, so there is nothing to build.
 - **Python 3.12+** and [`uv`](https://docs.astral.sh/uv/) for the client.
 - The **`livepeer-gateway` SDK** from the `ja/live-runner` branch (not yet on PyPI):
 
@@ -131,7 +131,7 @@ On-chain runs add a **remote signer** that holds the payer wallet and mints [pro
 
 - **Wallets stay outside the repo** — `*_KEYSTORE_DIR` points at go-livepeer keystores (mounted read-only); only the address + password come from `.env`.
 - **`.env` is per example and gitignored** — copy `.env.example` and fill in RPC, network, keystore paths, accounts, and pricing (it holds the keystore password).
-- **Runner price is USD per hour**: the app advertises `PRICE` as a plain dollar amount (e.g. `0.01`); `currency` and `unit` default to `usd` / `hour`, so only `price` is required. The orchestrator converts it to wei per second via the price feed. The signer caps what it will pay at `MAX_PRICE_PER_UNIT`, applied per **second** of runtime (0.000111USD is about 0.40 USD/hour).
+- **Runner price is a plain USD amount**: the app advertises `PRICE` (e.g. `0.01`). `currency` and `unit` default to `usd` / `hour`, so only `price` is required. With `hour` the orchestrator converts it to wei via the price feed and meters the session per second. Apps with bounded per-call work can register `unit="fixed"` to bill the price once per session (see tiles). The signer caps what it pays at `MAX_PRICE_PER_UNIT`, compared per billing unit: one second of runtime when metered (0.000111USD is about 0.40 USD/hour), the whole session price when fixed.
 - **Payments are probabilistic** — on a short run you'll rarely see a redemption; that's expected.
 
 ### Verifying discovery
@@ -142,7 +142,7 @@ Before running a client, confirm the orchestrator actually advertises your runne
 curl -sk https://localhost:8935/discovery | jq
 ```
 
-Each entry lists its `runners` with an `app`, `version`, capacity, and `price_info`. The orchestrator republishes your USD/hour price converted to wei — `price` in wei with `currency: wei` and `unit: seconds` (or `720p-pixel-seconds` for per-pixel video). Check that your app appears and the price is non-zero.
+Each entry lists its `runners` with an `app`, `version`, capacity, and `price_info`. The orchestrator republishes your USD price converted to wei — `price` in wei with `currency: wei` and `unit: seconds` (`720p-pixel-seconds` for per-pixel video, `fixed` for once-per-session pricing). Check that your app appears and the price is non-zero.
 
 ### Conventions
 

@@ -66,7 +66,7 @@ def _parse_args() -> argparse.Namespace:
         "--price",
         type=float,
         default=0,
-        help="Runner price in USD per hour (0 = free, the offchain default).",
+        help="Runner price in USD per tile session (0 = free, the offchain default).",
     )
     return parser.parse_args()
 
@@ -124,7 +124,10 @@ def main() -> None:
             # (go-livepeer#3955)
             mode="persistent",
             capacity=args.capacity,  # the knob this example showcases
-            price=args.price,  # USD/hour
+            price=args.price,  # USD per tile session
+            # Fixed pricing: bill once per session, not per second; tile work is
+            # bounded, so the billing model is part of the app, not a deploy knob.
+            unit="fixed",
         )
         log.info(
             "registered runner_id=%s capacity=%d orchestrator=%s",

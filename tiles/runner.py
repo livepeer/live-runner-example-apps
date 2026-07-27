@@ -124,7 +124,7 @@ def main() -> None:
             # (go-livepeer#3955)
             mode="persistent",
             capacity=args.capacity,  # the knob this example showcases
-            price=args.price,  # decimal USD/hour
+            price=args.price,  # USD/hour
         )
         log.info(
             "registered runner_id=%s capacity=%d orchestrator=%s",

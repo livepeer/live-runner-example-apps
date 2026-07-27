@@ -64,7 +64,7 @@ def main() -> None:
             # single-shot by nature; stays persistent until single-shot payment lands
             # (go-livepeer#3955)
             mode="persistent",
-            price=args.price,  # decimal USD/hour
+            price=args.price,  # USD/hour
         )
         log.info(
             "registered runner_id=%s orchestrator=%s",

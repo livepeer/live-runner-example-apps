@@ -142,7 +142,7 @@ Before running a client, confirm the orchestrator actually advertises your runne
 curl -sk https://localhost:8935/discovery | jq
 ```
 
-Each entry lists its `runners` with an `app`, `version`, capacity, and `price_info`. The orchestrator republishes your USD/hour price converted to wei — `price` in wei with `currency: wei` and `unit: seconds` (or `720p-pixel-seconds` for per-pixel video). Check that your app appears and the price is non-zero.
+Each entry lists its `runners` with an `app`, `version`, capacity, and `price_info`. The orchestrator republishes your USD price converted to wei — `price` in wei with `currency: wei` and `unit: seconds` (`720p-pixel-seconds` for per-pixel video, `fixed` for once-per-session pricing). Check that your app appears and the price is non-zero.
 
 ### Conventions
 

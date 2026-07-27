@@ -110,7 +110,7 @@ Each example is self-contained and its README has the run commands. Everything b
 
 ### Prerequisites
 
-- **Docker** for the end-to-end demos. They use the `livepeer/go-livepeer:ja-live-runner` image, so there is nothing to build.
+- **Docker** for the end-to-end demos. They use the mainline `livepeer/go-livepeer:v0.9.0` release image (live runners landed in go-livepeer#3938, fixed pricing in go-livepeer#3999), so there is nothing to build.
 - **Python 3.12+** and [`uv`](https://docs.astral.sh/uv/) for the client.
 - The **`livepeer-gateway` SDK** from the `ja/live-runner` branch (not yet on PyPI):
 

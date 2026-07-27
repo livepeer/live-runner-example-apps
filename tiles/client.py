@@ -106,8 +106,7 @@ async def _reserve_with_retry(
             if time.monotonic() >= deadline:
                 raise
             if not waiting:
-                # Expected while the runner is at capacity, but the reason also
-                # surfaces a runner that is down before the timeout ends the wait.
+                # Warn once per tile; the reason tells a full runner from a dead one.
                 log.warning(
                     "tile (%d,%d) no slot yet, retrying until --reserve-timeout: %s",
                     r,

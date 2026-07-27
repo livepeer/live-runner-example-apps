@@ -50,7 +50,7 @@ docker compose down
 
 ## Run on-chain (paid)
 
-Layer `compose.onchain.yml` to add a remote signer and run the orchestrator on-chain, so each tile call is paid through the signer. This example showcases **fixed pricing** (go-livepeer#3999): `PRICE` is billed once per tile session instead of metered per second, the natural model for bounded work like one tile. This needs an Ethereum RPC, a funded signer wallet (deposit + reserve), and an orchestrator wallet — see [On-chain (paid) setup](../README.md#on-chain-paid-setup) in the repo README.
+Layer `compose.onchain.yml` to run the orchestrator on-chain with a remote signer paying each tile call. This example showcases **fixed pricing**: `PRICE` is billed once per tile session instead of metered per second, the natural fit for bounded work. For the required RPC and wallets see [On-chain (paid) setup](../README.md#on-chain-paid-setup) in the repo README.
 
 ```sh
 cp .env.example .env   # fill in RPC, network, keystore paths, accounts, pricing

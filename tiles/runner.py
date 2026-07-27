@@ -66,16 +66,7 @@ def _parse_args() -> argparse.Namespace:
         "--price",
         type=float,
         default=0,
-        help="Runner price in USD (0 = free, the offchain default).",
-    )
-    parser.add_argument(
-        "--price-unit",
-        default="hour",
-        choices=["hour", "fixed"],
-        help=(
-            "How --price is charged: 'hour' meters the session per second; "
-            "'fixed' bills the full price once per tile session (go-livepeer#3999)."
-        ),
+        help="Runner price in USD per tile session (0 = free, the offchain default).",
     )
     return parser.parse_args()
 
@@ -133,8 +124,10 @@ def main() -> None:
             # (go-livepeer#3955)
             mode="persistent",
             capacity=args.capacity,  # the knob this example showcases
-            price=args.price,  # USD, metered or flat per --price-unit
-            unit=args.price_unit,
+            price=args.price,  # USD per tile session
+            # Fixed pricing: bill once per session, not per second; tile work is
+            # bounded, so the billing model is part of the app, not a deploy knob.
+            unit="fixed",
         )
         log.info(
             "registered runner_id=%s capacity=%d orchestrator=%s",

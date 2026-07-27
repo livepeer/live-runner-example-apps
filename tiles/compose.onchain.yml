@@ -35,4 +35,3 @@ services:
       # Keep it under ~0.00019 USD: the fee must fit in 100 tickets at the
       # orchestrator's -ticketEV=1e9 (numTickets = fee / ticketEV).
       - --price=${PRICE}
-      - --price-unit=fixed

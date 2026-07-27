@@ -1,5 +1,5 @@
 # On-chain payment overlay for tiles. Layer it on the offchain base:
-#   CAPACITY=9 docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d --build
+#   CAPACITY=9 docker compose -f compose.yml -f compose.onchain.yml up -d --build
 #
 # Adds the shared remote signer, re-points the orchestrator on-chain (see
 # ../compose.onchain.yml), and registers the app with a price so the orchestrator
@@ -31,5 +31,4 @@ services:
       - --orchSecret=abcdef
       - --runner-url=http://app:8989
       - --capacity=${CAPACITY:-4}
-      - --price=${PRICE_PER_UNIT}
-      - --pixels-per-unit=${PIXELS_PER_UNIT}
+      - --price=${PRICE}

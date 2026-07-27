@@ -66,14 +66,14 @@ curl -N http://localhost:8080/v1/chat/completions \
 
 ## Run on-chain (paid)
 
-Layer `docker-compose.onchain.yml` to add a remote signer and run the orchestrator on-chain, so vLLM advertises the price from `runners.json` and the gateway pays per call. Needs an Ethereum RPC, a funded signer wallet (deposit + reserve), and an orchestrator wallet — see [On-chain (paid) setup](../README.md#on-chain-paid-setup) in the repo README.
+Layer `compose.onchain.yml` to add a remote signer and run the orchestrator on-chain, so vLLM advertises the price from `runners.json` and the gateway pays per call. Needs an Ethereum RPC, a funded signer wallet (deposit + reserve), and an orchestrator wallet — see [On-chain (paid) setup](../README.md#on-chain-paid-setup) in the repo README.
 
 ```sh
 cp .env.example .env   # fill in RPC, network, keystore paths, accounts
-docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d
+docker compose -f compose.yml -f compose.onchain.yml up -d
 uv run gateway.py --signer http://localhost:7936 --discovery https://localhost:8935/discovery &   # gateway pays per request
 uv run client.py --prompt "In one sentence, what is Livepeer?"
-kill %1; docker compose -f docker-compose.yml -f docker-compose.onchain.yml down
+kill %1; docker compose -f compose.yml -f compose.onchain.yml down
 ```
 
 The client is **unchanged** — only the gateway gets `--signer`; it pays per call through the remote signer, so the consumer never sees discovery or payment. The price is set in `runners.json` (see the comments in `.env.example`).

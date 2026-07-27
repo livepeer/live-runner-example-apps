@@ -1,6 +1,6 @@
 # Shared offchain orchestrator service.
 #
-# Not run on its own. Each example's docker-compose.yml pulls this in with
+# Not run on its own. Each example's compose.yml pulls this in with
 # `extends` so the orchestrator is defined once for the whole repo:
 #
 #   services:

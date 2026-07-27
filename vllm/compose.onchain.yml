@@ -1,5 +1,5 @@
 # On-chain payment overlay for vllm. Layer it on the offchain base:
-#   docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d
+#   docker compose -f compose.yml -f compose.onchain.yml up -d
 #
 # Adds the shared remote signer, re-points the orchestrator on-chain (see
 # ../compose.onchain.yml), and mounts runners.json so the statically attached
@@ -36,8 +36,11 @@ services:
       - -ethAcctAddr=${ORCH_ETH_ACCT}
       - -ethPassword=${ORCH_ETH_PASSWORD}
       - -ethOrchAddr=${ORCH_ONCHAIN_ADDR}
+      # Price comes from the app's registration; -pricePerUnit only sets the
+      # unused legacy base price, but an on-chain O won't boot without it.
       - -pricePerUnit=0
-      - -ticketEV=1000000000000
+      - -ticketEV=1000000000
+      - -maxFaceValue=4000000000000000
       - -liveRunnerConfig=/config/runners.json
       - -monitor=false
       - -v=6

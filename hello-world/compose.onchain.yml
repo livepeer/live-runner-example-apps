@@ -1,5 +1,5 @@
 # On-chain payment overlay for hello-world. Layer it on the offchain base:
-#   docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d --build
+#   docker compose -f compose.yml -f compose.onchain.yml up -d --build
 #
 # Adds the shared remote signer, re-points the orchestrator on-chain (see
 # ../compose.onchain.yml), and registers the app with a price so the
@@ -29,5 +29,4 @@ services:
       - --orchestrator=https://orchestrator:8935
       - --orchSecret=abcdef
       - --runner-url=http://app:8989
-      - --price=${PRICE_PER_UNIT}
-      - --pixels-per-unit=${PIXELS_PER_UNIT}
+      - --price=${PRICE}

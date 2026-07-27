@@ -27,7 +27,7 @@ because an OpenAI client can't do discovery or settle payments itself — so `cl
 Registration is static (no register_runner): the orchestrator reads `runners.json` via
 -liveRunnerConfig and health-polls the runner. The vLLM container is a third-party image
 with zero Livepeer code, which is exactly why it's static — there's no app to put a
-register_runner in (contrast hello-world/echo). See docker-compose.yml.
+register_runner in (contrast hello-world/echo). See compose.yml.
 """
 
 from __future__ import annotations

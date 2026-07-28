@@ -13,7 +13,7 @@ The smallest possible app on the Livepeer network: a synchronous request/respons
 Prerequisites (Docker, `uv`, and the not-yet-released `livepeer-gateway` SDK — pinned in `pyproject.toml`) and the shared on-chain/payment setup live in the [repo README](../README.md).
 
 > [!NOTE]
-> This app currently runs in **persistent** mode. It will switch to **single-shot** once [#5](https://github.com/livepeer/live-runner-example-apps/issues/5) ships.
+> This app currently runs in **persistent** mode. It will switch to **single-shot** once [#5](https://github.com/livepeer/app-examples/issues/5) ships.
 
 ## How it's wired
 

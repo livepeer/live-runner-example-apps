@@ -47,9 +47,6 @@ curl http://localhost:8080/v1/chat/completions \
 
 ### Streaming (SSE)
 
-> [!IMPORTANT]
-> SSE streaming depends on gateway PR [#25](https://github.com/livepeer/livepeer-python-gateway/pull/25), which is not yet merged. This example pins the SDK to its branch (`rs/live-runner-streaming` in `pyproject.toml`); until it lands, streaming is only available from that branch, not `ja/live-runner`.
-
 Set `stream: true` and tokens arrive as they're generated instead of in one blob — the gateway forwards the runner's `text/event-stream` straight through (`call_runner(..., stream=True)`), no buffering. Payment is unchanged: the 402 challenge is handled before any tokens flow.
 
 ```sh

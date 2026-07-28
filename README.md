@@ -35,9 +35,6 @@ The orchestrator is a **transparent reverse proxy**: every endpoint you expose i
 
 Need a schema that isn't here? [Open an issue](https://github.com/livepeer/live-runner-example-apps/issues).
 
-> [!IMPORTANT]
-> SSE streaming (used by `vllm`) depends on gateway PR [#25](https://github.com/livepeer/livepeer-python-gateway/pull/25), not yet merged. Until it lands, streaming is only on the SDK's [`rs/live-runner-streaming`](https://github.com/livepeer/livepeer-python-gateway/tree/rs/live-runner-streaming) branch, not `ja/live-runner`.
-
 ## Examples
 
 | Example                        | Goal                                            | Registration | Mode                               | Transport         |

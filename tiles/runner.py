@@ -66,7 +66,7 @@ def _parse_args() -> argparse.Namespace:
         "--price",
         type=float,
         default=0,
-        help="Runner price in USD per tile session (0 = free, the offchain default).",
+        help="Runner price in USD per tile (0 = free, the offchain default).",
     )
     return parser.parse_args()
 
@@ -120,12 +120,13 @@ def main() -> None:
             secret=args.orchSecret,
             runner_url=args.runner_url,
             app=APP_ID,
-            # single-shot by nature; stays persistent until single-shot payment lands
-            # (go-livepeer#3955)
-            mode="persistent",
+            # one request, one response per tile: the orchestrator reserves a
+            # session per call and releases it when the response returns
+            # (go-livepeer#4000)
+            mode="single-shot",
             capacity=args.capacity,  # the knob this example showcases
-            price=args.price,  # USD per tile session
-            # Fixed pricing: bill once per session, not per second; tile work is
+            price=args.price,  # USD per tile
+            # Fixed pricing: bill once per tile call, not per second; tile work is
             # bounded, so the billing model is part of the app, not a deploy knob.
             unit="fixed",
         )

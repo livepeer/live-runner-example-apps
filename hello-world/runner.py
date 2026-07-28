@@ -38,7 +38,7 @@ def _parse_args() -> argparse.Namespace:
         "--price",
         type=float,
         default=0,
-        help="Runner price in USD per hour (0 = free, the offchain default).",
+        help="Runner price in USD per call (0 = free, the offchain default).",
     )
     return parser.parse_args()
 
@@ -61,10 +61,13 @@ def main() -> None:
             secret=args.orchSecret,
             runner_url=args.runner_url,
             app=APP_ID,
-            # single-shot by nature; stays persistent until single-shot payment lands
-            # (go-livepeer#3955)
-            mode="persistent",
-            price=args.price,  # USD/hour
+            # one request, one response: the orchestrator reserves a session per
+            # call and releases it when the response returns (go-livepeer#4000)
+            mode="single-shot",
+            price=args.price,  # USD per call
+            # Fixed pricing: one payment per call, not per-second metering; the
+            # work is bounded, so the billing model is part of the app.
+            unit="fixed",
         )
         log.info(
             "registered runner_id=%s orchestrator=%s",

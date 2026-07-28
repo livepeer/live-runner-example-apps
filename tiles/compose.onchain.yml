@@ -4,8 +4,8 @@
 # Adds the shared remote signer, re-points the orchestrator on-chain (see
 # ../compose.onchain.yml), and registers the app with a price so the orchestrator
 # issues a payment challenge. Requires a local .env (gitignored); copy .env.example
-# and fill it in. Each tile is its own reserve -> pay -> call -> release, so keep the
-# grid small on-chain. Then pay through the signer:
+# and fill it in. Each tile is one paid single-shot call, so keep the grid small
+# on-chain. Then pay through the signer:
 #   uv run client.py photo.jpg \
 #     --discovery https://localhost:8935/discovery \
 #     --signer http://localhost:7936
@@ -31,7 +31,7 @@ services:
       - --orchSecret=abcdef
       - --runner-url=http://app:8989
       - --capacity=${CAPACITY:-4}
-      # Fixed pricing: PRICE is billed once per tile session, not metered.
-      # Keep it under ~0.00019 USD: the fee must fit in 100 tickets at the
+      # Fixed pricing: PRICE is billed once per tile, not metered. Keep it
+      # under ~0.00019 USD: the fee must fit in 100 tickets at the
       # orchestrator's -ticketEV=1e9 (numTickets = fee / ticketEV).
       - --price=${PRICE}

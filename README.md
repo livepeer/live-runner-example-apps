@@ -5,7 +5,7 @@ Example **apps that run on** the Livepeer **live runner** — [go-livepeer](http
 The point is to **swap the compute without changing your app — permissionlessly, no lock-in**. Your app stays a plain service with little or no Livepeer-specific code, so you're never tied to us. And the network is permissionless: anyone can run or extend it, no one gatekeeps what you deploy, and no single party can take your app down. Write the app once; **move the compute freely**.
 
 > [!NOTE]
-> Live runners aren't on go-livepeer `main` yet — they live on the [`ja/live-runner`](https://github.com/livepeer/go-livepeer/tree/ja/live-runner) branch. Until it merges, both the orchestrator image and the SDK come from that branch.
+> The `livepeer-gateway` SDK isn't on PyPI yet — install it from the [`ja/live-runner`](https://github.com/livepeer/livepeer-python-gateway/tree/ja/live-runner) branch (see [Prerequisites](#prerequisites)).
 
 ## How it works
 
@@ -33,7 +33,7 @@ The orchestrator is a **transparent reverse proxy**: every endpoint you expose i
 - **Trickle** — continuous realtime video in/out. (`echo`)
 - **WebSocket** — long-lived bidirectional sessions. (external: `scope`)
 
-Need a schema that isn't here? [Open an issue](https://github.com/livepeer/live-runner-example-apps/issues).
+Need a schema that isn't here? [Open an issue](https://github.com/livepeer/live-runner-app-examples/issues).
 
 ## Examples
 
@@ -74,8 +74,8 @@ Chosen _at_ registration (above); **defaults to `persistent`** — set on both `
 - **Persistent** — a held-open session billed per second of wall-clock. Best for realtime / streaming. (`echo`)
 - **Single-shot** — one request in, one response out. Best for batch / request-response. (`hello-world`, `vllm` are single-shot by nature.)
 
-> [!IMPORTANT]
-> Single-shot payment isn't implemented yet ([go-livepeer#3955](https://github.com/livepeer/go-livepeer/issues/3955)), so the single-shot-by-nature apps above register as **persistent**. On-chain that bills per second for the whole open session and overbills short calls — keep them **offchain-only** until #3955 lands ([#5](https://github.com/livepeer/live-runner-example-apps/issues/5)).
+> [!NOTE]
+> Single-shot payment isn't implemented yet ([go-livepeer#3955](https://github.com/livepeer/go-livepeer/issues/3955)), so the single-shot-by-nature apps above register as **persistent**; they'll switch once it lands ([#5](https://github.com/livepeer/live-runner-app-examples/issues/5)).
 
 ## Calling your app
 
@@ -89,7 +89,7 @@ The client side is the same shape for every app — **discover → reserve → c
 Each example's `client.py` shows its exact calls — grep `# Livepeer:` to find them.
 
 > [!NOTE]
-> This is the flow today. Once single-shot lands ([#5](https://github.com/livepeer/live-runner-example-apps/issues/5)), we intend to abstract it into a single call — exact design TBD.
+> This is the flow today. Once single-shot lands ([#5](https://github.com/livepeer/live-runner-app-examples/issues/5)), we intend to abstract it into a single call — exact design TBD.
 
 ## External examples
 
@@ -99,7 +99,7 @@ Apps that integrate the live runner and live in their own repos — production d
 | -------------------------------------------------------------------------- | ------------------------------------------------ | ------------------- |
 | [daydreamlive/scope](https://github.com/daydreamlive/scope/tree/ja/runner) | Real-time AI video with downloadable LoRA models | WebSocket + trickle |
 
-Built one? [Open a PR](https://github.com/livepeer/live-runner-example-apps/compare) to list it here.
+Built one? [Open a PR](https://github.com/livepeer/live-runner-app-examples/compare) to list it here.
 
 ## Running the examples
 

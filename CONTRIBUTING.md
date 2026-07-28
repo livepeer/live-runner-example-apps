@@ -8,7 +8,7 @@ Fork the repository, clone your fork, create a descriptive branch, commit your c
 
 ### Issues
 
-- **Found a bug or something unclear?** [Open an issue](https://github.com/livepeer/live-runner-example-apps/issues) with what you expected, what happened, and the steps to reproduce.
+- **Found a bug or something unclear?** [Open an issue](https://github.com/livepeer/live-runner-app-examples/issues) with what you expected, what happened, and the steps to reproduce.
 - **Want a new transport or example?** Open an issue first to discuss scope before writing code.
 
 ### Commits

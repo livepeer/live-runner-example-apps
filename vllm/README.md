@@ -13,7 +13,7 @@ Runs an OpenAI-compatible LLM on the Livepeer network and consumes it with the *
 **Requires an NVIDIA GPU** for vLLM. The default model (`Qwen/Qwen2.5-0.5B-Instruct`) is tiny so it fits a modest card can be overridden with `VLLM_MODEL`. Prerequisites (Docker, `uv`, the not-yet-released SDK) and the shared on-chain/payment setup are in the [repo README](../README.md).
 
 > [!NOTE]
-> This app is single-shot by nature but currently registers as **persistent**. It will switch to **single-shot** once [#5](https://github.com/livepeer/live-runner-example-apps/issues/5) lands.
+> This app is single-shot by nature but currently registers as **persistent**. It will switch to **single-shot** once [#5](https://github.com/livepeer/live-runner-app-examples/issues/5) lands.
 
 ## How it's wired
 

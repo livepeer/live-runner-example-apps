@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""api-proxy client: discover a runner, send a prompt, stream the image back.
+"""api-proxy client: discover a runner, send a prompt, download the image.
 
-The request body is the Hugging Face text-to-image payload as-is
-({"inputs": "<prompt>"}); the runner forwards it verbatim and the image comes
-back as raw JPEG bytes, received with call_runner's streaming mode.
+The request body is the fal.ai text-to-image payload as-is
+({"prompt": "<prompt>"}); the runner forwards it verbatim. fal responds with
+JSON containing a CDN URL for the generated image, so this is an ordinary
+call_runner call — the client then downloads the image from the URL.
 
 Livepeer integration (grep `# Livepeer:`):
-  1. runner_selector()        — discover orchestrators advertising the app
-  2. call_runner(stream=True) — call the app through the orchestrator and read the
-                                raw response bytes; on the paid path it answers the
-                                402 payment challenge inline (one fixed payment per
-                                image). Single-shot needs no reserve/stop.
+  1. runner_selector()  — discover orchestrators advertising the app
+  2. call_runner()      — call the app through the orchestrator; on the paid path it
+                          answers the 402 payment challenge inline (one fixed payment
+                          per image). Single-shot needs no reserve/stop.
 """
 
 from __future__ import annotations
@@ -19,6 +19,8 @@ import argparse
 import asyncio
 import logging
 from pathlib import Path
+
+import aiohttp
 
 from livepeer_gateway.errors import LivepeerGatewayError
 from livepeer_gateway.live_runner import call_runner
@@ -56,19 +58,29 @@ async def main() -> None:
         runner = cursor.candidates[0]
         log.info("app_url=%s", runner.url)
 
-        stream = await call_runner(  # Livepeer: 2
+        result = await call_runner(  # Livepeer: 2
             runner=runner,  # discovery metadata tells call_runner the price unit
             runner_url=runner.url.rstrip("/") + "/proxy",
-            payload={"inputs": args.prompt},  # the HF payload, forwarded as-is
+            payload={"prompt": args.prompt},  # the fal payload, forwarded as-is
             signer_url=args.signer.strip() or None,
-            stream=True,  # the image comes back as raw bytes, not JSON
+            timeout=120.0,  # a hosted diffusion model can take tens of seconds
         )
-        async with stream:
-            image = b"".join([chunk async for chunk in stream.aiter_bytes()])
+
+        images = result.data.get("images") or []
+        url = images[0].get("url") if images and isinstance(images[0], dict) else None
+        if not url:
+            raise LivepeerGatewayError(f"response missing image url: {result.data}")
+        log.info("image_url=%s", url)
+
+        # The generated image lives on fal's CDN; fetch it directly.
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                resp.raise_for_status()
+                image = await resp.read()
 
         out_path = Path(args.output).expanduser()
         out_path.write_bytes(image)
-        log.info("wrote %s (%d bytes, %s)", out_path, len(image), stream.content_type)
+        log.info("wrote %s (%d bytes)", out_path, len(image))
     except LivepeerGatewayError as exc:
         raise SystemExit(f"ERROR: {exc}") from exc
 

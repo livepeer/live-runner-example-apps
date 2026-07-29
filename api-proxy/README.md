@@ -1,20 +1,20 @@
 # API-proxy app (a runner that is pure config)
 
-The live runner can also **pass calls through to an API that runs somewhere else** — here the **Hugging Face text-to-image inference API**. This example's runner is a **stock nginx**: [nginx.conf.template](nginx.conf.template) forwards each call to one pinned model URL and injects the operator's token. There is **no app code at all** — the orchestrator operator offers a hosted model ([Stable Diffusion 3 medium](https://huggingface.co/stabilityai/stable-diffusion-3-medium-diffusers) by default) as a paid capability with two config files.
+The live runner can also **pass calls through to an API that runs somewhere else** — here the **fal.ai text-to-image API**, reached through the Hugging Face router. This example's runner is a **stock nginx**: [nginx.conf.template](nginx.conf.template) forwards each call to one pinned model route and injects the operator's token. There is **no app code at all** — the orchestrator operator offers a hosted model ([FLUX.1 schnell](https://fal.ai/models/fal-ai/flux/schnell) by default) as a paid capability with two config files.
 
 |              |                                            |
 | ------------ | ------------------------------------------ |
 | App id       | `livepeer-example/api-proxy`               |
 | Runner mode  | single-shot                                |
 | Registration | static (orchestrator config + health poll) |
-| Transport    | HTTP (HF payload in, JPEG bytes out)       |
+| Transport    | HTTP (fal payload in, JSON image URL out)  |
 | Port         | 8989                                       |
 
 Prerequisites (Docker, `uv`, and the not-yet-released `livepeer-gateway` SDK — pinned in `pyproject.toml`) and the shared on-chain/payment setup live in the [repo README](../README.md). The demo upstream additionally needs a **Hugging Face API token** (`HF_TOKEN`, from [huggingface.co → settings → tokens](https://huggingface.co/settings/tokens)) with inference-provider credits.
 
 ## How it's wired
 
-The app is attached as a **static runner**: the orchestrator reads [runners.json](runners.json) via `-liveRunnerConfig` — app id, runner URL, single-shot mode, and the fixed price — and health-polls `/health` (an nginx `return 200`). The `/proxy` location proxies to the pinned model URL (`MODEL` in [compose.yml](compose.yml)) with `Authorization: Bearer <HF_TOKEN>` added. The caller's body is the [Hugging Face text-to-image payload](https://huggingface.co/docs/inference-providers/tasks/text-to-image) forwarded verbatim — `{"inputs": "<prompt>"}` — and the image comes back as **raw JPEG bytes**. The client calls it with `runner_selector` → `call_runner(..., stream=True)` ([client.py](client.py)) — discover, then one **single-shot** call per image, reading the bytes with `aiter_bytes()`; the orchestrator reserves a session per call and releases it when the response returns. Grep `# Livepeer:` in client.py to see the exact calls.
+The app is attached as a **static runner**: the orchestrator reads [runners.json](runners.json) via `-liveRunnerConfig` — app id, runner URL, single-shot mode, and the fixed price — and health-polls `/health` (an nginx `return 200`). The `/proxy` location proxies to the pinned fal model route (`MODEL` in [compose.yml](compose.yml)) with `Authorization: Bearer <HF_TOKEN>` added. The caller's body is the fal text-to-image payload forwarded verbatim — `{"prompt": "<prompt>"}` — and fal responds with **JSON carrying a CDN URL** for the generated image, which the client downloads. The client calls it with `runner_selector` → `call_runner` ([client.py](client.py)) — discover, then one **single-shot** call per image; the orchestrator reserves a session per call and releases it when the response returns. Grep `# Livepeer:` in client.py to see the exact calls.
 
 ## Offering an API as a capability — what this shows
 

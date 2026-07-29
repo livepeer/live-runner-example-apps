@@ -5,7 +5,7 @@ Example **apps that run on** the Livepeer **live runner** — [go-livepeer](http
 The point is to **swap the compute without changing your app — permissionlessly, no lock-in**. Your app stays a plain service with little or no Livepeer-specific code, so you're never tied to us. And the network is permissionless: anyone can run or extend it, no one gatekeeps what you deploy, and no single party can take your app down. Write the app once; **move the compute freely**.
 
 > [!NOTE]
-> Live runners aren't on go-livepeer `main` yet — they live on the [`ja/live-runner`](https://github.com/livepeer/go-livepeer/tree/ja/live-runner) branch. Until it merges, both the orchestrator image and the SDK come from that branch.
+> Live runners ship in mainline go-livepeer since [v0.9.0](https://github.com/livepeer/go-livepeer/releases/tag/v0.9.0). The Python SDK still comes from the [`ja/live-runner`](https://github.com/livepeer/livepeer-python-gateway/tree/ja/live-runner) branch until it is published to PyPI.
 
 ## How it works
 
@@ -18,7 +18,7 @@ flowchart LR
   app["Your app<br/>HTTP / WebSocket / trickle"]
   signer["Remote signer<br/>(on-chain)"]
 
-  client -->|"discover → reserve → call → release"| orch
+  client -->|"single-shot: discover → call · persistent: + reserve/release"| orch
   orch -->|"forwards your endpoints, unchanged"| app
   app -.->|"dynamic: register_runner · static: runners.json"| orch
   signer <-.->|"micropayment tickets"| orch
@@ -39,8 +39,8 @@ Need a schema that isn't here? [Open an issue](https://github.com/livepeer/live-
 
 | Example                        | Goal                                            | Registration | Mode                               | Transport         |
 | ------------------------------ | ----------------------------------------------- | ------------ | ---------------------------------- | ----------------- |
-| [`hello-world`](./hello-world) | The simplest app: one request, one response     | dynamic      | persistent (single-shot by nature) | HTTP (JSON)       |
-| [`tiles`](./tiles)             | Capacity fan-out — one session per tile         | dynamic      | persistent (single-shot by nature) | HTTP (base64 PNG) |
+| [`hello-world`](./hello-world) | The simplest app: one request, one response     | dynamic      | single-shot                        | HTTP (JSON)       |
+| [`tiles`](./tiles)             | Capacity fan-out — one call per tile            | dynamic      | single-shot                        | HTTP (base64 PNG) |
 | [`echo`](./echo)               | Realtime video, transformed and echoed back     | dynamic      | persistent                         | trickle           |
 | [`vllm`](./vllm)               | Drop-in OpenAI API; the client stays unmodified | static       | persistent (single-shot by nature) | HTTP + SSE        |
 
@@ -71,25 +71,20 @@ flowchart LR
 
 Chosen _at_ registration (above); **defaults to `persistent`** — set on both `register_runner(...)` and in `runners.json`. The examples set it explicitly.
 
-- **Persistent** — a held-open session billed per second of wall-clock. Best for realtime / streaming. (`echo`)
-- **Single-shot** — one request in, one response out. Best for batch / request-response. (`hello-world`, `vllm` are single-shot by nature.)
+- **Persistent** — a held-open session the client reserves and releases, billed per second of wall-clock (or once, with fixed pricing). Best for realtime / streaming. (`echo`, `vllm`)
+- **Single-shot** — one request in, one response out; the orchestrator reserves a session per call and releases it when the response returns, so the client manages no session at all. Best for batch / request-response. (`hello-world`, `tiles`)
 
-> [!IMPORTANT]
-> Single-shot payment isn't implemented yet ([go-livepeer#3955](https://github.com/livepeer/go-livepeer/issues/3955)), so the single-shot-by-nature apps above register as **persistent**. On-chain that bills per second for the whole open session and overbills short calls — keep them **offchain-only** until #3955 lands ([#5](https://github.com/livepeer/live-runner-example-apps/issues/5)).
+> [!NOTE]
+> The `vllm` example is single-shot by nature but stays **persistent** for now: it meters per second across a reserved session, and true per-token billing is brokerage for the gateway/signer layer.
 
 ## Calling your app
 
-The client side is the same shape for every app — **discover → reserve → call → release**:
+The client side depends on the runner's mode:
 
-1. **Discover** the app via the orchestrator's `/discovery`.
-2. **Reserve** a session (`reserve_session`).
-3. **Call** it — one `call_runner`, streamed frames, or a WebSocket, depending on transport.
-4. **Release** the session (`stop_runner_session`), which settles payment on-chain.
+- **Single-shot** — **discover → call**: find the app via `runner_selector`, then one `call_runner`. The orchestrator reserves a session for the call and releases it when the response returns; on the paid path `call_runner` answers the 402 payment challenge inline. (`hello-world`, `tiles`)
+- **Persistent** — **discover → reserve → call → release**: reserve a session (`reserve_session`), call it — `call_runner`, streamed frames, or a WebSocket, depending on transport — then release it (`stop_runner_session`), which settles payment on-chain. (`echo`, `vllm`)
 
 Each example's `client.py` shows its exact calls — grep `# Livepeer:` to find them.
-
-> [!NOTE]
-> This is the flow today. Once single-shot lands ([#5](https://github.com/livepeer/live-runner-example-apps/issues/5)), we intend to abstract it into a single call — exact design TBD.
 
 ## External examples
 
@@ -128,7 +123,7 @@ On-chain runs add a **remote signer** that holds the payer wallet and mints [pro
 
 - **Wallets stay outside the repo** — `*_KEYSTORE_DIR` points at go-livepeer keystores (mounted read-only); only the address + password come from `.env`.
 - **`.env` is per example and gitignored** — copy `.env.example` and fill in RPC, network, keystore paths, accounts, and pricing (it holds the keystore password).
-- **Runner price is a plain USD amount**: the app advertises `PRICE` (e.g. `0.01`). `currency` and `unit` default to `usd` / `hour`, so only `price` is required. With `hour` the orchestrator converts it to wei via the price feed and meters the session per second. Apps with bounded per-call work can register `unit="fixed"` to bill the price once per session (see tiles). The signer caps what it pays at `MAX_PRICE_PER_UNIT`, compared per billing unit: one second of runtime when metered (0.000111USD is about 0.40 USD/hour), the whole session price when fixed.
+- **Runner price is a plain USD amount**: the app advertises `PRICE` (e.g. `0.01`). `currency` and `unit` default to `usd` / `hour`, so only `price` is required. With `hour` the orchestrator converts it to wei via the price feed and meters the session per second. Apps with bounded per-call work can register `unit="fixed"` to bill the price once per session (see hello-world, tiles). The signer caps what it pays at `MAX_PRICE_PER_UNIT`, compared per billing unit: one second of runtime when metered (0.000111USD is about 0.40 USD/hour), the whole session price when fixed.
 - **Payments are probabilistic** — on a short run you'll rarely see a redemption; that's expected.
 
 ### Verifying discovery

@@ -2,7 +2,7 @@
 """tiles app: a CPU-bound image processor, made callable on the Livepeer network.
 
 Each POST /tile stylizes one image tile (a deliberately CPU-heavy transform). The
-client splits an image into a grid and fans out one session per tile, so `capacity`
+client splits an image into a grid and fans out one call per tile, so `capacity`
 — the number of sessions the orchestrator routes here at once — decides how many
 tiles process in parallel. See the README for the capacity demo.
 
@@ -66,7 +66,7 @@ def _parse_args() -> argparse.Namespace:
         "--price",
         type=float,
         default=0,
-        help="Runner price in USD per tile session (0 = free, the offchain default).",
+        help="Runner price in USD per tile (0 = free, the offchain default).",
     )
     return parser.parse_args()
 
@@ -120,13 +120,10 @@ def main() -> None:
             secret=args.orchSecret,
             runner_url=args.runner_url,
             app=APP_ID,
-            # single-shot by nature; stays persistent until single-shot payment lands
-            # (go-livepeer#3955)
-            mode="persistent",
+            mode="single-shot",
             capacity=args.capacity,  # the knob this example showcases
-            price=args.price,  # USD per tile session
-            # Fixed pricing: bill once per session, not per second; tile work is
-            # bounded, so the billing model is part of the app, not a deploy knob.
+            price=args.price,  # USD per tile
+            # one flat payment per tile instead of per-second metering
             unit="fixed",
         )
         log.info(

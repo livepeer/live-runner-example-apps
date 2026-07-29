@@ -29,4 +29,5 @@ services:
       - --orchestrator=https://orchestrator:8935
       - --orchSecret=abcdef
       - --runner-url=http://app:8989
+      # Billed once per call (fixed pricing); price cap in .env.example.
       - --price=${PRICE}

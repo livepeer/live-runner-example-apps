@@ -5,19 +5,16 @@ The smallest possible app on the Livepeer network: a synchronous request/respons
 |              |                                      |
 | ------------ | ------------------------------------ |
 | App id       | `livepeer-example/hello-world`       |
-| Runner mode  | persistent (single-shot by nature)   |
+| Runner mode  | single-shot                          |
 | Registration | dynamic (self-registers via the SDK) |
 | Transport    | HTTP (JSON request/response)         |
 | Port         | 8989                                 |
 
 Prerequisites (Docker, `uv`, and the not-yet-released `livepeer-gateway` SDK — pinned in `pyproject.toml`) and the shared on-chain/payment setup live in the [repo README](../README.md).
 
-> [!NOTE]
-> This app currently runs in **persistent** mode. It will switch to **single-shot** once [#5](https://github.com/livepeer/live-runner-example-apps/issues/5) ships.
-
 ## How it's wired
 
-The app is **dynamically registered**: it self-registers with the orchestrator via `register_runner` ([runner.py](runner.py)) and exposes a single `POST /hello`, reverse-proxied through the orchestrator. The client calls it with `reserve_session` → `call_runner` → `stop_runner_session` ([client.py](client.py)) — discover, reserve, call, release; one request, one response. Grep `# Livepeer:` in either file to see the exact calls. This is the base flow every other example builds on.
+The app is **dynamically registered**: it self-registers with the orchestrator via `register_runner` ([runner.py](runner.py)) and exposes a single `POST /hello`, reverse-proxied through the orchestrator. The client calls it with `runner_selector` → `call_runner` ([client.py](client.py)) — discover, then one call. Because the runner is **single-shot**, there is no session to manage: the orchestrator reserves one for the call and releases it when the response returns, and on the paid path `call_runner` answers the 402 payment challenge inline. Grep `# Livepeer:` in either file to see the exact calls. This is the base flow every other example builds on.
 
 ## Run offchain (free)
 
@@ -45,11 +42,11 @@ uv run client.py --name livepeer \
 docker compose -f compose.yml -f compose.onchain.yml down
 ```
 
-The app registers with a price (`--price` in USD/hour from `.env`) and the orchestrator advertises it in `/discovery`. The SDK client does discovery, the session, the `/hello` call, and payment itself — paying through the remote signer with **no gateway in between**. So this is the full paid stack end to end: **app + orchestrator + remote signer + SDK client**.
+The app registers with a price (`--price` from `.env`, in USD billed once per call — **fixed pricing**, the natural fit for bounded request/response work) and the orchestrator advertises it in `/discovery`. The SDK client does discovery, the `/hello` call, and payment itself — paying through the remote signer with **no gateway in between**. So this is the full paid stack end to end: **app + orchestrator + remote signer + SDK client**.
 
 ## Run without Docker
 
-Start an orchestrator built from `ja/live-runner` (see [Build from source](https://docs.livepeer.org/v1/orchestrators/guides/install-go-livepeer#build-from-source)), then the app and client directly:
+Start an orchestrator built from go-livepeer `v0.9.0` or newer (see [Build from source](https://docs.livepeer.org/v1/orchestrators/guides/install-go-livepeer#build-from-source)), then the app and client directly:
 
 ```sh
 ./livepeer -orchestrator -useLiveRunners -serviceAddr localhost:8935 -orchSecret abcdef -v 6

@@ -50,7 +50,7 @@ async def main() -> None:
         runner = cursor.candidates[0]
         log.info("app_url=%s", runner.url)
 
-        result = await call_runner(  # Livepeer: 2 (pays the 402 challenge inline)
+        result = await call_runner(  # Livepeer: 2
             runner=runner,  # discovery metadata tells call_runner the price unit
             runner_url=runner.url.rstrip("/") + "/hello",
             payload={"name": args.name},

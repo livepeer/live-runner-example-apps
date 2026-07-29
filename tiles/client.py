@@ -111,7 +111,7 @@ async def _call_tile_with_retry(
                 discovery_url=discovery_url, app=APP_ID
             )
             runner = cursor.candidates[0]
-            return await call_runner(  # Livepeer: 2 (pays the 402 challenge inline)
+            return await call_runner(  # Livepeer: 2
                 runner=runner,  # discovery metadata tells call_runner the price unit
                 runner_url=runner.url.rstrip("/") + "/tile",
                 payload=payload,

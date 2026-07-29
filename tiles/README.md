@@ -62,7 +62,7 @@ Each tile is one paid single-shot call — the orchestrator reserves a session f
 
 ## Run without Docker
 
-Start an orchestrator built from `ja/live-runner` (see [Build from source](https://docs.livepeer.org/v1/orchestrators/guides/install-go-livepeer#build-from-source)), then the app and client directly:
+Start an orchestrator built from go-livepeer `v0.9.0` or newer (see [Build from source](https://docs.livepeer.org/v1/orchestrators/guides/install-go-livepeer#build-from-source)), then the app and client directly:
 
 ```sh
 ./livepeer -orchestrator -useLiveRunners -serviceAddr localhost:8935 -orchSecret abcdef -v 6

@@ -5,7 +5,7 @@ Example **apps that run on** the Livepeer **live runner** — [go-livepeer](http
 The point is to **swap the compute without changing your app — permissionlessly, no lock-in**. Your app stays a plain service with little or no Livepeer-specific code, so you're never tied to us. And the network is permissionless: anyone can run or extend it, no one gatekeeps what you deploy, and no single party can take your app down. Write the app once; **move the compute freely**.
 
 > [!NOTE]
-> Live runners aren't on go-livepeer `main` yet — they live on the [`ja/live-runner`](https://github.com/livepeer/go-livepeer/tree/ja/live-runner) branch. Until it merges, both the orchestrator image and the SDK come from that branch.
+> Live runners ship in mainline go-livepeer since [v0.9.0](https://github.com/livepeer/go-livepeer/releases/tag/v0.9.0). The Python SDK still comes from the [`ja/live-runner`](https://github.com/livepeer/livepeer-python-gateway/tree/ja/live-runner) branch until it is published to PyPI.
 
 ## How it works
 
@@ -18,7 +18,7 @@ flowchart LR
   app["Your app<br/>HTTP / WebSocket / trickle"]
   signer["Remote signer<br/>(on-chain)"]
 
-  client -->|"discover → reserve → call → release"| orch
+  client -->|"single-shot: discover → call · persistent: + reserve/release"| orch
   orch -->|"forwards your endpoints, unchanged"| app
   app -.->|"dynamic: register_runner · static: runners.json"| orch
   signer <-.->|"micropayment tickets"| orch

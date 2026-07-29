@@ -2,7 +2,7 @@
 """tiles app: a CPU-bound image processor, made callable on the Livepeer network.
 
 Each POST /tile stylizes one image tile (a deliberately CPU-heavy transform). The
-client splits an image into a grid and fans out one session per tile, so `capacity`
+client splits an image into a grid and fans out one call per tile, so `capacity`
 — the number of sessions the orchestrator routes here at once — decides how many
 tiles process in parallel. See the README for the capacity demo.
 

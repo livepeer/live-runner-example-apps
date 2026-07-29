@@ -1,0 +1,13 @@
+[project]
+name = "livepeer-api-proxy"
+version = "0.1.0"
+description = "API proxy example app for the Livepeer network."
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp",
+    "livepeer-gateway",
+]
+
+# livepeer-gateway is not on PyPI yet; pull it from the branch.
+[tool.uv.sources]
+livepeer-gateway = { git = "https://github.com/livepeer/livepeer-python-gateway", branch = "ja/live-runner" }

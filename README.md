@@ -28,7 +28,7 @@ flowchart LR
 
 The orchestrator is a **transparent reverse proxy**: every endpoint you expose is passed through to your app unchanged, so you write an ordinary service and it runs on the network as-is. The transports supported today:
 
-- **HTTP** request/response — the common case. (`hello-world`, `tiles`)
+- **HTTP** request/response — the common case. (`hello-world`, `tiles`, `api-proxy`)
 - **HTTP + SSE** — streamed / token responses. (`vllm`)
 - **Trickle** — continuous realtime video in/out. (`echo`)
 - **WebSocket** — long-lived bidirectional sessions. (external: `scope`)
@@ -37,12 +37,13 @@ Need a schema that isn't here? [Open an issue](https://github.com/livepeer/runne
 
 ## Examples
 
-| Example                        | Goal                                            | Registration | Mode                               | Transport         | Pricing           |
-| ------------------------------ | ----------------------------------------------- | ------------ | ---------------------------------- | ----------------- | ----------------- |
-| [`hello-world`](./hello-world) | The simplest app: one request, one response     | dynamic      | single-shot                        | HTTP (JSON)       | fixed             |
-| [`tiles`](./tiles)             | Capacity fan-out — one call per tile            | dynamic      | single-shot                        | HTTP (base64 PNG) | fixed             |
-| [`echo`](./echo)               | Realtime video, transformed and echoed back     | dynamic      | persistent                         | trickle           | — (offchain only) |
-| [`vllm`](./vllm)               | Drop-in OpenAI API; the client stays unmodified | static       | persistent (single-shot by nature) | HTTP + SSE        | hour              |
+| Example                        | Goal                                                                   | Registration | Mode                               | Transport            | Pricing           |
+| ------------------------------ | ---------------------------------------------------------------------- | ------------ | ---------------------------------- | -------------------- | ----------------- |
+| [`hello-world`](./hello-world) | The simplest app: one request, one response                            | dynamic      | single-shot                        | HTTP (JSON)          | fixed             |
+| [`tiles`](./tiles)             | Capacity fan-out — one call per tile                                   | dynamic      | single-shot                        | HTTP (base64 PNG)    | fixed             |
+| [`api-proxy`](./api-proxy)     | Resell any HTTP API — the operator holds the key, callers pay per call | dynamic      | single-shot                        | HTTP (JSON envelope) | fixed             |
+| [`echo`](./echo)               | Realtime video, transformed and echoed back                            | dynamic      | persistent                         | trickle              | — (offchain only) |
+| [`vllm`](./vllm)               | Drop-in OpenAI API; the client stays unmodified                        | static       | persistent (single-shot by nature) | HTTP + SSE           | hour              |
 
 Start with `hello-world` (the smallest end-to-end path); the others each layer on one new idea. More will follow, including a full example that exercises every feature. Each is self-contained and runs **offchain** (free, no wallet); most also run **on-chain** (paid) — see each README.
 
@@ -52,7 +53,7 @@ This set stays **minimal and curated**: it covers each value of the axes above (
 
 How the app attaches to the orchestrator:
 
-- **Dynamic** — the app self-registers via the SDK (`register_runner`) and heartbeats; the orchestrator drops it when heartbeats stop. Best for apps that come and go. (`hello-world`, `echo`)
+- **Dynamic** — the app self-registers via the SDK (`register_runner`) and heartbeats; the orchestrator drops it when heartbeats stop. Best for apps that come and go. (`hello-world`, `api-proxy`, `echo`)
 - **Static** — the orchestrator is configured with the app's URL in a `runners.json` and health-polls it; the app needs no SDK. Best for fixed, long-running deployments. (`vllm`)
 
 The arrow flips — dynamic, the app announces itself; static, the orchestrator is told about a passive app:
@@ -74,7 +75,7 @@ flowchart LR
 Chosen _at_ registration (above); **defaults to `persistent`** — set on both `register_runner(...)` and in `runners.json`. The examples set it explicitly.
 
 - **Persistent** — a held-open session the client reserves and releases, billed per second of wall-clock (or once, with fixed pricing). Best for realtime / streaming. (`echo`, `vllm`)
-- **Single-shot** — one request in, one response out; the orchestrator reserves a session per call and releases it when the response returns, so the client manages no session at all. Best for batch / request-response. (`hello-world`, `tiles`)
+- **Single-shot** — one request in, one response out; the orchestrator reserves a session per call and releases it when the response returns, so the client manages no session at all. Best for batch / request-response. (`hello-world`, `tiles`, `api-proxy`)
 
 > [!NOTE]
 > The `vllm` example is single-shot by nature but stays **persistent** for now: it meters per second across a reserved session, and true per-token billing is brokerage for the gateway/signer layer.
@@ -83,7 +84,7 @@ Chosen _at_ registration (above); **defaults to `persistent`** — set on both `
 
 The client side depends on the runner's mode:
 
-- **Single-shot** — **discover → call**: find the app via `runner_selector`, then one `call_runner`. The orchestrator reserves a session for the call and releases it when the response returns; on the paid path `call_runner` answers the 402 payment challenge inline. (`hello-world`, `tiles`)
+- **Single-shot** — **discover → call**: find the app via `runner_selector`, then one `call_runner`. The orchestrator reserves a session for the call and releases it when the response returns; on the paid path `call_runner` answers the 402 payment challenge inline. (`hello-world`, `tiles`, `api-proxy`)
 - **Persistent** — **discover → reserve → call → release**: reserve a session (`reserve_session`), call it — `call_runner`, streamed frames, or a WebSocket, depending on transport — then release it (`stop_runner_session`), which settles payment on-chain. (`echo`, `vllm`)
 
 Each example's `client.py` shows its exact calls — grep `# Livepeer:` to find them.

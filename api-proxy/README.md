@@ -2,14 +2,13 @@
 
 Wraps an existing HTTP API so it's reachable, and payable, through the Livepeer network. `POST /proxy` takes a JSON envelope describing the upstream call and returns the upstream response — the app runs no model and knows nothing about what it forwards. The demo upstream is the **Hugging Face text-to-image inference API** ([Stable Diffusion 3 medium](https://huggingface.co/stabilityai/stable-diffusion-3-medium-diffusers) by default), but `--upstream` points it at any REST API.
 
-|              |                                           |
-| ------------ | ----------------------------------------- |
-| App id       | `livepeer-example/api-proxy`              |
-| Runner mode  | single-shot                               |
-| Registration | dynamic (self-registers via the SDK)      |
-| Transport    | HTTP (JSON envelope in, JSON/base64 out)  |
-| Upstream     | Hugging Face inference API (`--upstream`) |
-| Port         | 8989                                      |
+|              |                                          |
+| ------------ | ---------------------------------------- |
+| App id       | `livepeer-example/api-proxy`             |
+| Runner mode  | single-shot                              |
+| Registration | dynamic (self-registers via the SDK)     |
+| Transport    | HTTP (JSON envelope in, JSON/base64 out) |
+| Port         | 8989                                     |
 
 Prerequisites (Docker, `uv`, and the not-yet-released `livepeer-gateway` SDK — pinned in `pyproject.toml`) and the shared on-chain/payment setup live in the [repo README](../README.md). The demo upstream additionally needs a **Hugging Face API token** (`HF_TOKEN`, from [huggingface.co → settings → tokens](https://huggingface.co/settings/tokens)) with inference-provider credits.
 
@@ -24,8 +23,6 @@ Most real apps don't host models; they call an API. This example shows that a ru
 The interesting part is **who holds the key**. The upstream credential (`UPSTREAM_TOKEN`) lives with the runner operator; the app injects it as a Bearer token on every forward and drops any `Authorization` a caller sends. Callers never see an API key — they discover the app and pay **per call through Livepeer**, while the operator pays the upstream and sets `PRICE` above the per-call upstream cost. **Fixed pricing** is the natural fit: one call is one bounded unit of work, so the runner bills one flat price per call instead of metering time (compare [`vllm`](../vllm), where open-ended sessions make per-second metering the better fit).
 
 ## Run offchain (free)
-
-Offchain means no Livepeer payment; the upstream call still uses the operator's Hugging Face credits.
 
 ```sh
 HF_TOKEN=hf_... docker compose up -d --build

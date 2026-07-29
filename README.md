@@ -93,9 +93,10 @@ Each example's `client.py` shows its exact calls — grep `# Livepeer:` to find 
 
 Apps that integrate the live runner and live in their own repos — production deployments and standalone examples alike. This table is links-only: the code, CI, and support stay with the author.
 
-| Project                                                                    | What it is                                       | Transport           |
-| -------------------------------------------------------------------------- | ------------------------------------------------ | ------------------- |
-| [daydreamlive/scope](https://github.com/daydreamlive/scope/tree/ja/runner) | Real-time AI video with downloadable LoRA models | WebSocket + trickle |
+| Project                                                                    | What it is                                                                             | Transport           |
+| -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------- |
+| [daydreamlive/scope](https://github.com/daydreamlive/scope/tree/ja/runner) | Real-time AI video with downloadable LoRA models                                       | WebSocket + trickle |
+| [livepeer/api-proxy](https://github.com/livepeer/api-proxy)                | Attach several API endpoints dynamically — key storage and request stats for operators | HTTP                |
 
 Built one? [Open a PR](https://github.com/livepeer/runner-app-examples/compare) that adds a row. To make your repo easy to find, follow the community convention:
 

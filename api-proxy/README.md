@@ -1,6 +1,6 @@
 # API-proxy app (passthrough to an upstream API)
 
-The live runner can also **pass calls through to an API that runs somewhere else** — a hosted model API, a SaaS endpoint, a service on your own infrastructure. The orchestrator operator attaches this proxy as a **static runner** and offers the upstream as a paid capability on the network: `POST /proxy` forwards a JSON envelope to the upstream and returns its response. The demo upstream is the **Hugging Face text-to-image inference API** ([Stable Diffusion 3 medium](https://huggingface.co/stabilityai/stable-diffusion-3-medium-diffusers) by default), but `--upstream` points it at any REST API.
+The live runner can also **pass calls through to an API that runs somewhere else** — a hosted model API, a SaaS endpoint, a service on your own infrastructure. The orchestrator operator attaches the proxy as a runner — **statically or dynamically; this example uses static** — and offers the upstream as a paid capability on the network: `POST /proxy` forwards a JSON envelope to the upstream and returns its response. The demo upstream is the **Hugging Face text-to-image inference API** ([Stable Diffusion 3 medium](https://huggingface.co/stabilityai/stable-diffusion-3-medium-diffusers) by default), but `--upstream` points it at any REST API.
 
 |              |                                            |
 | ------------ | ------------------------------------------ |
@@ -23,7 +23,7 @@ Everything the operator sets lives on the operator's side. `runners.json` names 
 **Fixed pricing** is the natural fit: one call is one bounded unit of work, so the runner bills one flat price per call instead of metering time.
 
 > [!NOTE]
-> Registration can also be **dynamic**: an operator tool can `register_runner` several API endpoints at runtime, each as its own priced capability, without touching the orchestrator config. That is what [livepeer/api-proxy](https://github.com/livepeer/api-proxy) does in production — dynamic endpoint registration, secure key storage, and request stats for orchestrator operators.
+> Registration can also be **dynamic**: an operator tool can `register_runner` several API endpoints at runtime, each as its own priced capability, without touching the orchestrator config. See [livepeer/api-proxy](https://github.com/livepeer/api-proxy) for an example of dynamic endpoint registration, with key storage and request stats for orchestrator operators.
 
 ## Run offchain (free)
 

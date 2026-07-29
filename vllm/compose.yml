@@ -40,7 +40,7 @@ services:
       - "${VLLM_GPU_MEM_UTIL:-0.5}"
     environment:
       # Only needed for gated models; leave empty otherwise.
-      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN:-}
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
     # vLLM needs an NVIDIA GPU.
     deploy:
       resources:

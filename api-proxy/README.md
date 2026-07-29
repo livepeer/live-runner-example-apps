@@ -9,7 +9,7 @@ Wraps an existing HTTP API so it's reachable, and payable, through the Livepeer 
 | Registration | dynamic (self-registers via the SDK)      |
 | Transport    | HTTP (JSON envelope in, JSON/base64 out)  |
 | Upstream     | Hugging Face inference API (`--upstream`) |
-| Port         | 8990                                      |
+| Port         | 8989                                      |
 
 Prerequisites (Docker, `uv`, and the not-yet-released `livepeer-gateway` SDK — pinned in `pyproject.toml`) and the shared on-chain/payment setup live in the [repo README](../README.md). The demo upstream additionally needs a **Hugging Face API token** (`HF_TOKEN`, from [huggingface.co → settings → tokens](https://huggingface.co/settings/tokens)) with inference-provider credits.
 

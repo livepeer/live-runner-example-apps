@@ -15,6 +15,6 @@ RUN pip install --no-cache-dir \
 WORKDIR /app
 COPY runner.py client.py ./
 
-EXPOSE 8990
+EXPOSE 8989
 
 ENTRYPOINT ["python", "runner.py"]

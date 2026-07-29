@@ -28,7 +28,7 @@ from aiohttp import web
 from livepeer_gateway.live_runner import register_runner
 
 DEFAULT_HOST = "127.0.0.1"
-DEFAULT_PORT = 8990
+DEFAULT_PORT = 8989
 DEFAULT_UPSTREAM = "https://router.huggingface.co"
 APP_ID = "livepeer-example/api-proxy"
 UPSTREAM_TIMEOUT = 120  # a hosted diffusion model can take tens of seconds

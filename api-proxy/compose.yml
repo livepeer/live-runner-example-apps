@@ -27,5 +27,5 @@ services:
       - --host=0.0.0.0
       - --orchestrator=https://orchestrator:8935
       - --orchSecret=abcdef
-      - --runner-url=http://app:8990
+      - --runner-url=http://app:8989
       - --upstream=https://router.huggingface.co

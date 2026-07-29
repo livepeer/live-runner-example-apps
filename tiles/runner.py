@@ -120,8 +120,6 @@ def main() -> None:
             secret=args.orchSecret,
             runner_url=args.runner_url,
             app=APP_ID,
-            # one request, one response per tile: the orchestrator reserves a
-            # session per call and releases it on return
             mode="single-shot",
             capacity=args.capacity,  # the knob this example showcases
             price=args.price,  # USD per tile

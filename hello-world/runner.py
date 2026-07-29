@@ -61,8 +61,6 @@ def main() -> None:
             secret=args.orchSecret,
             runner_url=args.runner_url,
             app=APP_ID,
-            # one request, one response: the orchestrator reserves a session
-            # per call and releases it on return
             mode="single-shot",
             price=args.price,  # USD per call
             # one flat payment per call instead of per-second metering

@@ -1,6 +1,6 @@
 # API-proxy app (a runner that is pure config)
 
-The live runner can also **pass calls through to an API that runs somewhere else** — here the **fal.ai text-to-image API**, reached through the Hugging Face router. This example's runner is a **stock nginx**: [nginx.conf.template](nginx.conf.template) forwards each call to one pinned model route and injects the operator's token. There is **no app code at all** — the orchestrator operator offers a hosted model ([FLUX.1 schnell](https://fal.ai/models/fal-ai/flux/schnell) by default) as a paid capability with two config files.
+The live runner can also **pass calls through to an API that runs somewhere else** — here the **fal.ai text-to-image API**. This example's runner is a **stock nginx**: [nginx.conf.template](nginx.conf.template) forwards each call to one pinned model route and injects the operator's token. There is **no app code at all** — the orchestrator operator offers a hosted model ([FLUX.1 schnell](https://fal.ai/models/fal-ai/flux/schnell) by default) as a paid capability with two config files.
 
 |              |                                            |
 | ------------ | ------------------------------------------ |
@@ -10,15 +10,15 @@ The live runner can also **pass calls through to an API that runs somewhere else
 | Transport    | HTTP (fal payload in, JSON image URL out)  |
 | Port         | 8989                                       |
 
-Prerequisites (Docker, `uv`, and the not-yet-released `livepeer-gateway` SDK — pinned in `pyproject.toml`) and the shared on-chain/payment setup live in the [repo README](../README.md). The demo upstream additionally needs a **Hugging Face API token** (`HF_TOKEN`, from [huggingface.co → settings → tokens](https://huggingface.co/settings/tokens)) with inference-provider credits.
+Prerequisites (Docker, `uv`, and the not-yet-released `livepeer-gateway` SDK — pinned in `pyproject.toml`) and the shared on-chain/payment setup live in the [repo README](../README.md). The demo upstream additionally needs a **fal.ai API key** (`FAL_KEY`, from [fal.ai → dashboard → API keys](https://fal.ai/dashboard/keys)).
 
 ## How it's wired
 
-The app is attached as a **static runner**: the orchestrator reads [runners.json](runners.json) via `-liveRunnerConfig` — app id, runner URL, single-shot mode, and the fixed price — and health-polls `/health` (an nginx `return 200`). The `/proxy` location proxies to the pinned fal model route (`MODEL` in [compose.yml](compose.yml)) with `Authorization: Bearer <HF_TOKEN>` added. The caller's body is the fal text-to-image payload forwarded verbatim — `{"prompt": "<prompt>"}` — and fal responds with **JSON carrying a CDN URL** for the generated image, which the client downloads. The client calls it with `runner_selector` → `call_runner` ([client.py](client.py)) — discover, then one **single-shot** call per image; the orchestrator reserves a session per call and releases it when the response returns. Grep `# Livepeer:` in client.py to see the exact calls.
+The app is attached as a **static runner**: the orchestrator reads [runners.json](runners.json) via `-liveRunnerConfig` — app id, runner URL, single-shot mode, and the fixed price — and health-polls `/health` (an nginx `return 200`). The `/proxy` location proxies to the pinned fal model route (`MODEL` in [compose.yml](compose.yml)) with `Authorization: Key <FAL_KEY>` added. The caller's body is the fal text-to-image payload forwarded verbatim — `{"prompt": "<prompt>"}` — and fal responds with **JSON carrying a CDN URL** for the generated image, which the client downloads. The client calls it with `runner_selector` → `call_runner` ([client.py](client.py)) — discover, then one **single-shot** call per image; the orchestrator reserves a session per call and releases it when the response returns. Grep `# Livepeer:` in client.py to see the exact calls.
 
 ## Offering an API as a capability — what this shows
 
-Everything is operator-side config. `runners.json` names the capability and sets the **fixed per-image price**; the nginx config pins the model URL and holds the credential (`HF_TOKEN`, from `.env`). The pinned URL is also the security model: the operator's credential can only be spent on exactly the offered model — callers choose nothing but the prompt, and never see an API key. They discover the capability and pay **per image through Livepeer**, while the operator pays the upstream and prices above the per-image upstream cost.
+Everything is operator-side config. `runners.json` names the capability and sets the **fixed per-image price**; the nginx config pins the model URL and holds the credential (`FAL_KEY`, from `.env`). The pinned URL is also the security model: the operator's credential can only be spent on exactly the offered model — callers choose nothing but the prompt, and never see an API key. They discover the capability and pay **per image through Livepeer**, while the operator pays the upstream and prices above the per-image upstream cost.
 
 Offering a second model is more config, not code: one more `runners.json` entry (its own app id and price) plus one more nginx service with a different `MODEL`.
 
@@ -30,7 +30,7 @@ Offering a second model is more config, not code: one more `runners.json` entry 
 ## Run offchain (free)
 
 ```sh
-cp .env.example .env   # fill in HF_TOKEN; ignore the on-chain block
+cp .env.example .env   # fill in FAL_KEY; ignore the on-chain block
 docker compose up -d
 curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # confirm livepeer-example/api-proxy registered
 uv run client.py --prompt "a watercolor painting of a llama writing code"
@@ -44,7 +44,7 @@ docker compose down
 Layer `compose.onchain.yml` to run the orchestrator on-chain with a remote signer paying each call — one fixed payment per image, at the price `runners.json` advertises. For the required RPC and wallets see [On-chain (paid) setup](../README.md#on-chain-paid-setup) in the repo README.
 
 ```sh
-cp .env.example .env   # fill in HF_TOKEN, RPC, network, keystore paths, accounts
+cp .env.example .env   # fill in FAL_KEY, RPC, network, keystore paths, accounts
 docker compose -f compose.yml -f compose.onchain.yml up -d
 uv run client.py --prompt "a watercolor painting of a llama writing code" \
   --discovery https://localhost:8935/discovery \

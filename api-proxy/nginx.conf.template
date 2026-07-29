@@ -1,7 +1,7 @@
 # The whole runner: a stock nginx forwards each call to one pinned fal.ai
-# model route (via the Hugging Face router) and injects the operator's token.
+# model route and injects the operator's key.
 # The orchestrator health-polls /health and reverse-proxies caller requests to
-# /proxy. HF_TOKEN and MODEL are substituted from the environment by the nginx
+# /proxy. FAL_KEY and MODEL are substituted from the environment by the nginx
 # image's template mechanism.
 server {
     listen 8989;
@@ -14,8 +14,8 @@ server {
     # The pinned URL is the security model: the operator's credential can only
     # be spent on exactly this model, callers choose nothing but the payload.
     location = /proxy {
-        proxy_pass https://router.huggingface.co/fal-ai/${MODEL};
-        proxy_set_header Authorization "Bearer ${HF_TOKEN}";
+        proxy_pass https://fal.run/${MODEL};
+        proxy_set_header Authorization "Key ${FAL_KEY}";
         proxy_ssl_server_name on;
         proxy_read_timeout 120s;
     }

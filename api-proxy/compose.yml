@@ -2,7 +2,7 @@
 # attached as a static runner via runners.json (-liveRunnerConfig). There is no
 # app code at all: nginx.conf.template is the whole runner.
 #
-# Needs HF_TOKEN (the upstream credential nginx injects) in a local .env — copy
+# Needs FAL_KEY (the upstream credential nginx injects) in a local .env — copy
 # .env.example. Once up, call it from the host with the SDK:
 #   docker compose up -d
 #   uv run client.py --prompt "..." --discovery https://localhost:8935/discovery
@@ -32,8 +32,8 @@ services:
     image: nginx:1.27-alpine
     container_name: example_apps_api_proxy
     environment:
-      # The operator-held upstream credential (huggingface.co → settings → tokens).
-      - HF_TOKEN=${HF_TOKEN:?set HF_TOKEN in .env (copy .env.example)}
+      # The operator-held upstream credential (fal.ai → dashboard → API keys).
+      - FAL_KEY=${FAL_KEY:?set FAL_KEY in .env (copy .env.example)}
       # The one model this runner offers (a fal.ai route); swap it here.
       - MODEL=fal-ai/flux/schnell
     volumes:

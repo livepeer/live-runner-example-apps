@@ -34,7 +34,7 @@ services:
     container_name: example_apps_api_proxy
     environment:
       # The operator-held upstream credential (huggingface.co → settings → tokens).
-      UPSTREAM_TOKEN: ${HF_TOKEN:?set HF_TOKEN in .env (copy .env.example)}
+      - UPSTREAM_TOKEN=${HF_TOKEN:?set HF_TOKEN in .env (copy .env.example)}
     command:
       - --host=0.0.0.0
       - --upstream=https://router.huggingface.co

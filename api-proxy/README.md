@@ -20,7 +20,7 @@ The app is **dynamically registered**: it self-registers with the orchestrator v
 
 Most real apps don't host models; they call an API. This example shows that a runner can be exactly that call: the same thin proxy you would deploy anywhere, registered on the network unchanged.
 
-The interesting part is **who holds the key**. The upstream credential (`UPSTREAM_TOKEN`) lives with the runner operator; the app injects it as a Bearer token on every forward and drops any `Authorization` a caller sends. Callers never see an API key — they discover the app and pay **per call through Livepeer**, while the operator pays the upstream and sets `PRICE` above the per-call upstream cost. **Fixed pricing** is the natural fit: one call is one bounded unit of work, so the runner bills one flat price per call instead of metering time (compare [`vllm`](../vllm), where open-ended sessions make per-second metering the better fit).
+The interesting part is **who holds the key**. Whoever runs the app sets `UPSTREAM_TOKEN` in its environment (the compose files feed it from `HF_TOKEN`); the orchestrator never sees it — it only routes calls and takes payment. The app injects the token as a Bearer header on every forward and drops any `Authorization` a caller sends. So callers need no API key of their own: they discover the app and pay **per call through Livepeer**, while the app's operator pays the upstream and sets `PRICE` above the per-call upstream cost. **Fixed pricing** is the natural fit: one call is one bounded unit of work, so the runner bills one flat price per call instead of metering time (compare [`vllm`](../vllm), where open-ended sessions make per-second metering the better fit).
 
 ## Run offchain (free)
 

@@ -3,9 +3,9 @@
 #
 # The orchestrator service is defined once in ../compose.orchestrator.yml and
 # pulled in with `extends`. Needs HF_TOKEN (the upstream credential the app
-# injects) from the shell or a local .env. Once up, call it from the host with
-# the SDK:
-#   HF_TOKEN=hf_... docker compose up -d --build
+# injects) in a local .env — copy .env.example. Once up, call it from the host
+# with the SDK:
+#   docker compose up -d --build
 #   uv run client.py --prompt "..." --discovery https://localhost:8935/discovery
 
 services:
@@ -34,7 +34,7 @@ services:
     container_name: example_apps_api_proxy
     environment:
       # The operator-held upstream credential (huggingface.co → settings → tokens).
-      UPSTREAM_TOKEN: ${HF_TOKEN:?set HF_TOKEN in the shell or .env}
+      UPSTREAM_TOKEN: ${HF_TOKEN:?set HF_TOKEN in .env (copy .env.example)}
     command:
       - --host=0.0.0.0
       - --upstream=https://router.huggingface.co

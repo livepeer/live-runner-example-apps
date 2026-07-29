@@ -28,7 +28,8 @@ Everything the operator sets lives on the operator's side. `runners.json` names 
 ## Run offchain (free)
 
 ```sh
-HF_TOKEN=hf_... docker compose up -d --build
+cp .env.example .env   # fill in HF_TOKEN; ignore the on-chain block
+docker compose up -d --build
 curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # confirm livepeer-example/api-proxy registered
 uv run client.py --prompt "a watercolor painting of a llama writing code"
 docker compose down

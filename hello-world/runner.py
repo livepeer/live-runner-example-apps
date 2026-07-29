@@ -67,7 +67,7 @@ def main() -> None:
             price=args.price,  # USD per call
             # Fixed pricing: one payment per call, not per-second metering; the
             # work is bounded, so the billing model is part of the app.
-            unit="fixed",
+            price_unit="fixed",
         )
         log.info(
             "registered runner_id=%s orchestrator=%s",

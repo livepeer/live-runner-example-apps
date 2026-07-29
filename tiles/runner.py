@@ -95,7 +95,12 @@ def _process(png: bytes, work: int) -> bytes:
 
 
 async def _handle_tile(request: web.Request) -> web.Response:
-    payload = await request.json()
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = None
+    if not isinstance(payload, dict):
+        raise web.HTTPBadRequest(text="body must be a JSON object")
     b64 = payload.get("tile")
     if not isinstance(b64, str) or not b64:
         raise web.HTTPBadRequest(text="missing 'tile' (base64 PNG)")

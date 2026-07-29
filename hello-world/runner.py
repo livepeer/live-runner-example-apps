@@ -61,12 +61,11 @@ def main() -> None:
             secret=args.orchSecret,
             runner_url=args.runner_url,
             app=APP_ID,
-            # one request, one response: the orchestrator reserves a session per
-            # call and releases it when the response returns (go-livepeer#4000)
+            # one request, one response: the orchestrator reserves a session
+            # per call and releases it on return
             mode="single-shot",
             price=args.price,  # USD per call
-            # Fixed pricing: one payment per call, not per-second metering; the
-            # work is bounded, so the billing model is part of the app.
+            # one flat payment per call instead of per-second metering
             unit="fixed",
         )
         log.info(

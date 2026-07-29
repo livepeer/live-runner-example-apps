@@ -121,13 +121,11 @@ def main() -> None:
             runner_url=args.runner_url,
             app=APP_ID,
             # one request, one response per tile: the orchestrator reserves a
-            # session per call and releases it when the response returns
-            # (go-livepeer#4000)
+            # session per call and releases it on return
             mode="single-shot",
             capacity=args.capacity,  # the knob this example showcases
             price=args.price,  # USD per tile
-            # Fixed pricing: bill once per tile call, not per second; tile work is
-            # bounded, so the billing model is part of the app, not a deploy knob.
+            # one flat payment per tile instead of per-second metering
             unit="fixed",
         )
         log.info(

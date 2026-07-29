@@ -31,7 +31,5 @@ services:
       - --orchSecret=abcdef
       - --runner-url=http://app:8989
       - --capacity=${CAPACITY:-4}
-      # Fixed pricing: PRICE is billed once per tile, not metered. Keep it
-      # under ~0.00019 USD: the fee must fit in 100 tickets at the
-      # orchestrator's -ticketEV=1e9 (numTickets = fee / ticketEV).
+      # Billed once per tile (fixed pricing); price cap in .env.example.
       - --price=${PRICE}

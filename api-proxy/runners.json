@@ -1,0 +1,13 @@
+{
+  "runners": [
+    {
+      "label": "api-proxy",
+      "app": "livepeer-example/api-proxy",
+      "runner_url": "http://app:8989",
+      "health_url": "/health",
+      "mode": "single-shot",
+      "capacity": 1,
+      "price_info": { "price": 0.0001, "unit": "fixed" }
+    }
+  ]
+}

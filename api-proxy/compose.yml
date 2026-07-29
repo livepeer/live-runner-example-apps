@@ -1,9 +1,10 @@
-# End-to-end offchain demo: orchestrator + api-proxy app.
+# End-to-end offchain demo: orchestrator + api-proxy app, attached as a static
+# runner via runners.json (-liveRunnerConfig).
 #
 # The orchestrator service is defined once in ../compose.orchestrator.yml and
-# pulled in with `extends`; this file only adds the app. Needs HF_TOKEN (the
-# upstream credential the app injects) from the shell or a local .env. Once up,
-# call it from the host with the SDK:
+# pulled in with `extends`. Needs HF_TOKEN (the upstream credential the app
+# injects) from the shell or a local .env. Once up, call it from the host with
+# the SDK:
 #   HF_TOKEN=hf_... docker compose up -d --build
 #   uv run client.py --prompt "..." --discovery https://localhost:8935/discovery
 
@@ -12,6 +13,21 @@ services:
     extends:
       file: ../compose.orchestrator.yml
       service: orchestrator
+    # `extends` can't append a single flag to `command`, so the command is
+    # restated here with -liveRunnerConfig added and runners.json mounted in.
+    command:
+      - -orchestrator
+      - -useLiveRunners
+      - -serviceAddr=127.0.0.1:8935
+      - -httpAddr=0.0.0.0:8935
+      - -liveRunnerAddr=https://orchestrator:8935
+      - -orchSecret=abcdef
+      - -network=offchain
+      - -monitor=false
+      - -liveRunnerConfig=/config/runners.json
+      - -v=6
+    volumes:
+      - ./runners.json:/config/runners.json:ro
 
   app:
     build: .
@@ -19,13 +35,6 @@ services:
     environment:
       # The operator-held upstream credential (huggingface.co → settings → tokens).
       UPSTREAM_TOKEN: ${HF_TOKEN:?set HF_TOKEN in the shell or .env}
-    # Wait for the orchestrator's healthcheck so registration doesn't race its boot.
-    depends_on:
-      orchestrator:
-        condition: service_healthy
     command:
       - --host=0.0.0.0
-      - --orchestrator=https://orchestrator:8935
-      - --orchSecret=abcdef
-      - --runner-url=http://app:8989
       - --upstream=https://router.huggingface.co

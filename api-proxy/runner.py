@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""api-proxy app: forward requests to an upstream HTTP API, made callable on Livepeer.
+"""api-proxy app: pass calls through to an upstream HTTP API, offered on Livepeer.
 
-Wraps any existing REST API so it can be reached, and paid for, through the
-Livepeer network. `POST /proxy` takes a JSON envelope describing the upstream
-call ({"method", "path", "headers", "json"}) and returns the upstream response
+The upstream capability runs somewhere else; this app is the passthrough the
+orchestrator operator offers on the network. It is attached as a static runner
+(runners.json → -liveRunnerConfig), so there is no Livepeer code here at all:
+the orchestrator health-polls /health and reverse-proxies calls to /proxy.
+
+`POST /proxy` takes a JSON envelope describing the upstream call
+({"method", "path", "headers", "json"}) and returns the upstream response
 ({"status", "headers", "body"} for text, {"status", "headers", "body_b64"} for
-binary). The upstream credential stays here, server-side: set UPSTREAM_TOKEN and
-the app injects it as a Bearer token on every forward — callers pay Livepeer per
+binary). The upstream credential stays server-side: set UPSTREAM_TOKEN and the
+app injects it as a Bearer token on every forward — callers pay Livepeer per
 call and never see an API key.
-
-Livepeer integration (grep `# Livepeer:`):
-  1. register_runner()     — announce the app to the orchestrator (startup)
-  2. registration.close()  — deregister (cleanup)
 """
 
 from __future__ import annotations
@@ -25,12 +25,9 @@ from contextlib import suppress
 import aiohttp
 from aiohttp import web
 
-from livepeer_gateway.live_runner import register_runner
-
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8989
 DEFAULT_UPSTREAM = "https://router.huggingface.co"
-APP_ID = "livepeer-example/api-proxy"
 UPSTREAM_TIMEOUT = 120  # a hosted diffusion model can take tens of seconds
 _TEXT_TYPES = ("text/", "application/json", "application/xml", "application/x-ndjson")
 
@@ -39,9 +36,6 @@ log = logging.getLogger("api-proxy")
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Live Runner api-proxy demo.")
-    parser.add_argument("--orchestrator", default="https://localhost:8935")
-    parser.add_argument("--orchSecret", default="abcdef")
-    parser.add_argument("--runner-url", default=f"http://{DEFAULT_HOST}:{DEFAULT_PORT}")
     parser.add_argument(
         "--host", default=DEFAULT_HOST, help="Bind address (use 0.0.0.0 in containers)."
     )
@@ -50,13 +44,13 @@ def _parse_args() -> argparse.Namespace:
         default=DEFAULT_UPSTREAM,
         help="Base URL of the API to proxy requests to.",
     )
-    parser.add_argument(
-        "--price",
-        type=float,
-        default=0,
-        help="Runner price in USD per call (0 = free, the offchain default).",
-    )
     return parser.parse_args()
+
+
+async def _handle_health(request: web.Request) -> web.Response:
+    # The orchestrator health-polls this (health_url in runners.json); routing
+    # starts once it returns 200.
+    return web.json_response({"status": "ok"})
 
 
 async def _handle_proxy(request: web.Request) -> web.Response:
@@ -111,32 +105,15 @@ def main() -> None:
 
     async def _on_startup(app: web.Application) -> None:
         app["session"] = aiohttp.ClientSession()
-        app["registration"] = await register_runner(  # Livepeer: 1
-            args.orchestrator,
-            secret=args.orchSecret,
-            runner_url=args.runner_url,
-            app=APP_ID,
-            mode="single-shot",
-            price=args.price,  # USD per call
-            # one flat payment per call instead of per-second metering
-            unit="fixed",
-        )
-        log.info(
-            "registered runner_id=%s orchestrator=%s upstream=%s",
-            app["registration"].runner_id,
-            app["registration"].orchestrator_url,
-            app["upstream"],
-        )
 
     async def _on_cleanup(app: web.Application) -> None:
-        with suppress(Exception):
-            await app["registration"].close()  # Livepeer: 2
         with suppress(Exception):
             await app["session"].close()
 
     app = web.Application()
     app["upstream"] = args.upstream
     app["token"] = os.environ.get("UPSTREAM_TOKEN", "")
+    app.router.add_get("/health", _handle_health)
     app.router.add_post("/proxy", _handle_proxy)
     app.on_startup.append(_on_startup)
     app.on_cleanup.append(_on_cleanup)

@@ -10,13 +10,45 @@ The smallest possible app on the Livepeer network: a synchronous request/respons
 | Transport    | HTTP (JSON request/response)         |
 | Port         | 8989                                 |
 
-Prerequisites (Docker, `uv`, and the not-yet-released `livepeer-gateway` SDK — pinned in `pyproject.toml`) and the shared on-chain/payment setup live in the [repo README](../README.md).
+## Call a live network runner (paid) — start here
+
+One command. Discover a public `livepeer-example/hello-world` runner, pay via PymtHouse, print the response.
+
+1. Install deps from this directory (`uv` + the SDK pin in `pyproject.toml`):
+
+```sh
+cd hello-world
+uv sync
+```
+
+2. Get a PymtHouse **sdkToken** (Dashboard → your app → copy the base64 gateway token). It embeds signer URL, auth header, and discovery.
+
+```sh
+export PYMTHOUSE_TOKEN='paste-your-base64-sdkToken-here'
+```
+
+3. Run:
+
+```sh
+uv run client.py --token "$PYMTHOUSE_TOKEN" --name livepeer
+# {'message': 'Hello, livepeer!'}
+```
+
+That is the full path: discovery → reserve (if needed) → pay the 402 challenge → `POST /hello` → release.
+
+**What to expect on today's public runner:** discovery may still show `mode: "persistent"` and `price_info.unit: "seconds"` (signer payment type `live`). Local `runner.py` already registers `price_unit="fixed"` for when that orch is redeployed; the client handles both persistent and single-shot.
+
+> Tip: if pymthouse briefly fails with `failed to reach endpoint: …/generate-live-payment`, retry — the signer is reachable; transient Railway blips show up as empty `CancelledError` wrappers.
+
+---
+
+Prerequisites for local Docker demos (and the shared on-chain compose setup) live in the [repo README](../README.md).
 
 ## How it's wired
 
-The app is **dynamically registered**: it self-registers with the orchestrator via `register_runner` ([runner.py](runner.py)) and exposes a single `POST /hello`, reverse-proxied through the orchestrator. The client calls it with `runner_selector` → `call_runner` ([client.py](client.py)) — discover, then one call. Because the runner is **single-shot**, there is no session to manage: the orchestrator reserves one for the call and releases it when the response returns, and on the paid path `call_runner` answers the 402 payment challenge inline. Grep `# Livepeer:` in either file to see the exact calls. This is the base flow every other example builds on.
+The app is **dynamically registered**: it self-registers with the orchestrator via `register_runner` ([runner.py](runner.py)) and exposes a single `POST /hello`, reverse-proxied through the orchestrator. The client calls it with `runner_selector` → `call_runner` ([client.py](client.py)) — discover, then one call. On single-shot runners the orchestrator reserves a session for the call and releases it when the response returns; on persistent runners the client reserves/stops explicitly. On the paid path `call_runner` answers the 402 payment challenge inline. Grep `# Livepeer:` in either file to see the exact calls.
 
-## Run offchain (free)
+## Run offchain locally (free)
 
 ```sh
 docker compose up -d --build
@@ -28,7 +60,7 @@ docker compose down
 
 `compose.yml` brings up an orchestrator (`-useLiveRunners`) and the app; the commands above run the client against it.
 
-## Run on-chain (paid)
+## Run on-chain locally (paid)
 
 Layer `compose.onchain.yml` to add a remote signer and run the orchestrator on-chain, so the app advertises a price and the SDK pays per call. This needs an Ethereum RPC, a funded signer wallet (deposit + reserve), and an orchestrator wallet — see [On-chain (paid) setup](../README.md#on-chain-paid-setup) in the repo README.
 
@@ -42,7 +74,7 @@ uv run client.py --name livepeer \
 docker compose -f compose.yml -f compose.onchain.yml down
 ```
 
-The app registers with a price (`--price` from `.env`, in USD billed once per call — **fixed pricing**, the natural fit for bounded request/response work) and the orchestrator advertises it in `/discovery`. The SDK client does discovery, the `/hello` call, and payment itself — paying through the remote signer with **no gateway in between**. So this is the full paid stack end to end: **app + orchestrator + remote signer + SDK client**.
+The app registers with a price (`--price` from `.env`, in USD billed once per call — **fixed pricing**, the natural fit for bounded request/response work) and the orchestrator advertises it in `/discovery`.
 
 ## Run without Docker
 

@@ -1,11 +1,10 @@
-# End-to-end offchain demo: orchestrator + api-proxy app, attached as a static
-# runner via runners.json (-liveRunnerConfig).
+# End-to-end offchain demo: orchestrator + the api-proxy "app" — a stock nginx
+# attached as a static runner via runners.json (-liveRunnerConfig). There is no
+# app code at all: nginx.conf.template is the whole runner.
 #
-# The orchestrator service is defined once in ../compose.orchestrator.yml and
-# pulled in with `extends`. Needs HF_TOKEN (the upstream credential the app
-# injects) in a local .env — copy .env.example. Once up, call it from the host
-# with the SDK:
-#   docker compose up -d --build
+# Needs HF_TOKEN (the upstream credential nginx injects) in a local .env — copy
+# .env.example. Once up, call it from the host with the SDK:
+#   docker compose up -d
 #   uv run client.py --prompt "..." --discovery https://localhost:8935/discovery
 
 services:
@@ -30,11 +29,12 @@ services:
       - ./runners.json:/config/runners.json:ro
 
   app:
-    build: .
+    image: nginx:1.27-alpine
     container_name: example_apps_api_proxy
     environment:
       # The operator-held upstream credential (huggingface.co → settings → tokens).
-      - UPSTREAM_TOKEN=${HF_TOKEN:?set HF_TOKEN in .env (copy .env.example)}
-    command:
-      - --host=0.0.0.0
-      - --upstream=https://router.huggingface.co
+      - HF_TOKEN=${HF_TOKEN:?set HF_TOKEN in .env (copy .env.example)}
+      # The one model this runner offers; swap it here.
+      - MODEL=stabilityai/stable-diffusion-3-medium-diffusers
+    volumes:
+      - ./nginx.conf.template:/etc/nginx/templates/default.conf.template:ro

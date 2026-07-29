@@ -16,7 +16,6 @@ on:
       - "hello-world/**"
       - "echo/**"
       - "tiles/**"
-      - "api-proxy/**"
       - ".github/workflows/images.yml"
   pull_request:
     paths: *image_paths
@@ -35,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        example: [hello-world, echo, tiles, api-proxy]
+        example: [hello-world, echo, tiles]
     steps:
       - uses: actions/checkout@v7
 

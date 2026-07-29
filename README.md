@@ -33,18 +33,20 @@ The orchestrator is a **transparent reverse proxy**: every endpoint you expose i
 - **Trickle** — continuous realtime video in/out. (`echo`)
 - **WebSocket** — long-lived bidirectional sessions. (external: `scope`)
 
-Need a schema that isn't here? [Open an issue](https://github.com/livepeer/live-runner-example-apps/issues).
+Need a schema that isn't here? [Open an issue](https://github.com/livepeer/runner-app-examples/issues).
 
 ## Examples
 
-| Example                        | Goal                                            | Registration | Mode                               | Transport         |
-| ------------------------------ | ----------------------------------------------- | ------------ | ---------------------------------- | ----------------- |
-| [`hello-world`](./hello-world) | The simplest app: one request, one response     | dynamic      | single-shot                        | HTTP (JSON)       |
-| [`tiles`](./tiles)             | Capacity fan-out — one call per tile            | dynamic      | single-shot                        | HTTP (base64 PNG) |
-| [`echo`](./echo)               | Realtime video, transformed and echoed back     | dynamic      | persistent                         | trickle           |
-| [`vllm`](./vllm)               | Drop-in OpenAI API; the client stays unmodified | static       | persistent (single-shot by nature) | HTTP + SSE        |
+| Example                        | Goal                                            | Registration | Mode                               | Transport         | Pricing           |
+| ------------------------------ | ----------------------------------------------- | ------------ | ---------------------------------- | ----------------- | ----------------- |
+| [`hello-world`](./hello-world) | The simplest app: one request, one response     | dynamic      | single-shot                        | HTTP (JSON)       | fixed             |
+| [`tiles`](./tiles)             | Capacity fan-out — one call per tile            | dynamic      | single-shot                        | HTTP (base64 PNG) | fixed             |
+| [`echo`](./echo)               | Realtime video, transformed and echoed back     | dynamic      | persistent                         | trickle           | — (offchain only) |
+| [`vllm`](./vllm)               | Drop-in OpenAI API; the client stays unmodified | static       | persistent (single-shot by nature) | HTTP + SSE        | hour              |
 
 Start with `hello-world` (the smallest end-to-end path); the others each layer on one new idea. More will follow, including a full example that exercises every feature. Each is self-contained and runs **offchain** (free, no wallet); most also run **on-chain** (paid) — see each README.
+
+This set stays **minimal and curated**: it covers each value of the axes above (registration, mode, transport, pricing), not one example per app. New examples land here only when they fill a gap in that table — apps built on the runner belong in their own repos, listed under [External examples](#external-examples).
 
 ## Registration
 
@@ -88,13 +90,17 @@ Each example's `client.py` shows its exact calls — grep `# Livepeer:` to find 
 
 ## External examples
 
-Apps that integrate the live runner and live in their own repos — production deployments and standalone examples alike:
+Apps that integrate the live runner and live in their own repos — production deployments and standalone examples alike. This table is links-only: the code, CI, and support stay with the author.
 
 | Project                                                                    | What it is                                       | Transport           |
 | -------------------------------------------------------------------------- | ------------------------------------------------ | ------------------- |
 | [daydreamlive/scope](https://github.com/daydreamlive/scope/tree/ja/runner) | Real-time AI video with downloadable LoRA models | WebSocket + trickle |
 
-Built one? [Open a PR](https://github.com/livepeer/live-runner-example-apps/compare) to list it here.
+Built one? [Open a PR](https://github.com/livepeer/runner-app-examples/compare) that adds a row. To make your repo easy to find, follow the community convention:
+
+- Name the repo `<app>-livepeer-runner` (e.g. `comfyui-livepeer-runner`).
+- Add the `livepeer-runner` GitHub topic.
+- Mention Livepeer in the repo description.
 
 ## Running the examples
 

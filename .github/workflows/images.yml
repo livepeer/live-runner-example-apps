@@ -53,7 +53,7 @@ jobs:
             type=raw,value=stable,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
           labels: |
             org.opencontainers.image.title=runner-example-${{ matrix.example }}
-            org.opencontainers.image.description=Livepeer live-runner example (${{ matrix.example }}) — example, not production-ready
+            org.opencontainers.image.description=Livepeer runner example (${{ matrix.example }}) — example, not production-ready
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v4

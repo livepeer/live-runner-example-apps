@@ -44,7 +44,12 @@ def _parse_args() -> argparse.Namespace:
 
 
 async def _handle_hello(request: web.Request) -> web.Response:
-    payload = await request.json()
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = None
+    if not isinstance(payload, dict):
+        raise web.HTTPBadRequest(text="body must be a JSON object")
     name = str(payload.get("name", "world"))
     return web.json_response({"message": f"Hello, {name}!"})
 

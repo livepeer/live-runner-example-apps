@@ -54,7 +54,14 @@ async def _handle_health(request: web.Request) -> web.Response:
 
 
 async def _handle_proxy(request: web.Request) -> web.Response:
-    payload = await request.json()
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = None
+    if not isinstance(payload, dict) or not isinstance(
+        payload.get("headers") or {}, dict
+    ):
+        raise web.HTTPBadRequest(text="body must be a JSON envelope object")
     method = str(payload.get("method", "GET")).upper()
     path = str(payload.get("path", "/"))
     body = payload.get("json")

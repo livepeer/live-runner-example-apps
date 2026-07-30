@@ -19,7 +19,7 @@ The app is attached as a **static runner**: the orchestrator reads [runners.json
 
 ## Offering an API as a capability — what this shows
 
-Everything is operator-side config. `runners.json` names the capability and sets the **fixed per-image price**; the nginx config pins the model URL and holds the credential (`HF_TOKEN`, from `.env`). The pinned URL is also the security model: the operator's credential can only be spent on exactly the offered model — callers choose nothing but the prompt, and never see an API key. They discover the capability and pay **per image through Livepeer**, while the operator pays the upstream and prices above the per-image upstream cost.
+Everything is operator-side config. `runners.json` names the capability and sets the **fixed per-image price**; the nginx config pins the model URL and holds the credential (`HF_TOKEN`, from `.env`). The pinned URL is also the security model: the operator's credential can only be spent on exactly the offered model. The config pins the method to `POST` and drops the caller's query string too, so the body is the only thing a caller controls: they choose nothing but the prompt, and never see an API key. They discover the capability and pay **per image through Livepeer**, while the operator pays the upstream and prices above the per-image upstream cost.
 
 Offering a second model is more config, not code: one more `runners.json` entry (its own app id and price) plus one more nginx service with a different `MODEL`.
 

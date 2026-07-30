@@ -12,7 +12,11 @@ server {
 
     # The pinned URL is the security model: the operator's credential can only
     # be spent on exactly this model, callers choose nothing but the payload.
+    # Method and query string are part of "nothing": nginx would forward both
+    # upstream as the caller sent them, so pin the method and drop the args.
     location = /proxy {
+        limit_except POST { deny all; }
+        set $args '';
         proxy_pass https://router.huggingface.co/hf-inference/models/${MODEL};
         proxy_set_header Authorization "Bearer ${HF_TOKEN}";
         proxy_ssl_server_name on;

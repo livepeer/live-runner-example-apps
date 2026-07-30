@@ -80,6 +80,8 @@ uv run client.py sample.mp4 --mode blur \
 docker compose -f compose.yml -f compose.onchain.yml down
 ```
 
+The ffmpeg and webcam pipes above work the same way on-chain: add `--signer` to the `client.py` in the pipeline. Without it the client stops at the payment challenge (`Live runner paid call requires signer_url`), which closes the pipe and leaves ffmpeg reporting `Broken pipe` — the paid stack refusing an unpaid caller, not a broken camera.
+
 A metered session pays **more than once**. The upfront payment that answers the 402 challenge only buys the signer's preroll (about ten seconds), while the orchestrator keeps debiting every few seconds and releases the session on the first debit it cannot cover. So `reserve_session` keeps the session funded in the background for as long as the client holds it, and leaving the client's `async with session` block stops that before the session is released. A stream that outlives the preroll is the whole point of this example on-chain, so use a clip of at least a few tens of seconds (the 30s `sample.mp4` above is enough): watch `docker compose logs -f orchestrator` and you should see repeated payments, not one.
 
 That is the difference from `hello-world` and `tiles`, whose fixed pricing settles the entire bill upfront and starts no ticker.

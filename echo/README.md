@@ -8,6 +8,7 @@ A realtime video app on the Livepeer network: it receives a live video stream ov
 | Runner mode  | persistent (held-open session)       |
 | Registration | dynamic (self-registers via the SDK) |
 | Transport    | trickle (realtime video in/out)      |
+| Pricing      | none (offchain only)                 |
 | Port         | 8989                                 |
 
 Prerequisites (Docker, `uv`, the not-yet-released SDK) and the shared setup are in the [repo README](../README.md).

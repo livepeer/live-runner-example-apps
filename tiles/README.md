@@ -8,6 +8,7 @@ An image processor on the Livepeer network that shows what **capacity** does. It
 | Runner mode  | single-shot                          |
 | Registration | dynamic (self-registers via the SDK) |
 | Transport    | HTTP (base64 PNG in/out)             |
+| Pricing      | fixed (one price per tile call)      |
 | Port         | 8989                                 |
 
 Prerequisites (Docker, `uv`, and the not-yet-released `livepeer-gateway` SDK — pinned in `pyproject.toml`) and the shared on-chain/payment setup live in the [repo README](../README.md).

@@ -8,6 +8,7 @@ Runs an OpenAI-compatible LLM on the Livepeer network and consumes it with the *
 | Runner mode  | persistent (single-shot by nature)         |
 | Registration | static (orchestrator config + health poll) |
 | Transport    | HTTP + SSE (OpenAI `/v1/chat/completions`) |
+| Pricing      | hour (metered per second of session)       |
 | Port         | 8000 (vLLM), 8080 (gateway)                |
 
 **Requires an NVIDIA GPU** for vLLM. The default model (`Qwen/Qwen2.5-0.5B-Instruct`) is tiny so it fits a modest card can be overridden with `VLLM_MODEL`. Prerequisites (Docker, `uv`, the not-yet-released SDK) and the shared on-chain/payment setup are in the [repo README](../README.md).

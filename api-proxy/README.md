@@ -1,25 +1,29 @@
-# API-proxy app (passthrough to an upstream API)
+# API-proxy app (a runner that is pure config)
 
-The live runner can also **pass calls through to an API that runs somewhere else** — a hosted model API, a SaaS endpoint, a service on your own infrastructure. The orchestrator operator attaches the proxy as a runner — **statically or dynamically; this example uses static** — and offers the upstream as a paid capability on the network: `POST /proxy` forwards a JSON envelope to the upstream and returns its response. The demo upstream is the **Hugging Face text-to-image inference API** ([Stable Diffusion 3 medium](https://huggingface.co/stabilityai/stable-diffusion-3-medium-diffusers) by default), but `--upstream` points it at any REST API.
+The live runner can also **pass calls through to an API that runs somewhere else** — here the **Hugging Face text-to-image inference API**. This example's runner is a **stock nginx**: [nginx.conf.template](nginx.conf.template) forwards each call to one pinned model URL and injects the operator's token. There is **no app code at all** — the orchestrator operator offers a hosted model ([Stable Diffusion 3 medium](https://huggingface.co/stabilityai/stable-diffusion-3-medium-diffusers) by default) as a paid capability with two config files.
 
-|              |                                            |
-| ------------ | ------------------------------------------ |
-| App id       | `livepeer-example/api-proxy`               |
-| Runner mode  | single-shot                                |
-| Registration | static (orchestrator config + health poll) |
-| Transport    | HTTP (JSON envelope in, JSON/base64 out)   |
-| Pricing      | fixed (one price per call)                 |
-| Port         | 8989                                       |
+|              |                                              |
+| ------------ | -------------------------------------------- |
+| App id       | `livepeer-example/stable-diffusion-3-medium` |
+| Runner mode  | single-shot                                  |
+| Registration | static (orchestrator config + health poll)   |
+| Transport    | HTTP (HF payload in, JPEG bytes out)         |
+| Pricing      | fixed (one price per call)                   |
+| Port         | 8989                                         |
 
 Prerequisites (Docker, `uv`, and the not-yet-released `livepeer-gateway` SDK — pinned in `pyproject.toml`) and the shared on-chain/payment setup live in the [repo README](../README.md). The demo upstream additionally needs a **Hugging Face API token** (`HF_TOKEN`, from [huggingface.co → settings → tokens](https://huggingface.co/settings/tokens)) with inference-provider credits.
 
 ## How it's wired
 
-The app is attached as a **static runner**: the orchestrator reads [runners.json](runners.json) via `-liveRunnerConfig` — app id, runner URL, single-shot mode, and the fixed price — and health-polls `/health`. There is **no Livepeer code in the app**: [runner.py](runner.py) is a plain aiohttp service. Each `/proxy` call forwards `{"method", "path", "headers", "json"}` to `<upstream>/<path>` and returns `{"status", "headers", "body"}` for text upstream bodies or `{"status", "headers", "body_b64"}` for binary ones (a generated image, say). The client calls it with `runner_selector` → `call_runner` ([client.py](client.py)) — discover, then one **single-shot** call per request; the orchestrator reserves a session per call and releases it when the response returns. Grep `# Livepeer:` in client.py to see the exact calls.
+The app is attached as a **static runner**: the orchestrator reads [runners.json](runners.json) via `-liveRunnerConfig` — app id, runner URL, single-shot mode, and the fixed price — and health-polls `/health` (an nginx `return 200`). The `/proxy` location proxies to the pinned model URL (`MODEL` in [compose.yml](compose.yml)) with `Authorization: Bearer <HF_TOKEN>` added. The caller's body is the [Hugging Face text-to-image payload](https://huggingface.co/docs/inference-providers/tasks/text-to-image) forwarded verbatim — `{"inputs": "<prompt>"}` — and the image comes back as **raw JPEG bytes**. The client calls it with `runner_selector` → `call_runner(..., stream=True)` ([client.py](client.py)) — discover, then one **single-shot** call per image, reading the bytes with `aiter_bytes()`; the orchestrator reserves a session per call and releases it when the response returns. Grep `# Livepeer:` in client.py to see the exact calls.
 
 ## Offering an API as a capability — what this shows
 
-Everything the operator sets lives on the operator's side. `runners.json` names the capability, the proxy's URL, and the **fixed per-call price**; the upstream credential (`UPSTREAM_TOKEN`, fed from `HF_TOKEN` by the compose files) sits in the app's environment, and the app injects it as a Bearer header on every forward — any `Authorization` a caller sends is dropped. Callers need no API key of their own: they discover the capability and pay **per call through Livepeer**, while the operator pays the upstream and prices above the per-call upstream cost.
+Everything is operator-side config. `runners.json` names the capability and sets the **fixed per-image price**; the nginx config pins the model URL and holds the credential (`HF_TOKEN`, from `.env`). The pinned URL is also the security model: the operator's credential can only be spent on exactly the offered model. The config pins the method to `POST` and drops the caller's query string too, so the body is the only thing a caller controls: they choose nothing but the prompt, and never see an API key. They discover the capability and pay **per image through Livepeer**, while the operator pays the upstream and prices above the per-image upstream cost.
+
+The app id names the model, not the proxy, because that is what callers discover: they match it exactly, so it has to say what they get. Swapping `MODEL` means renaming the app id with it.
+
+Offering a second model is more config, not code: one more `runners.json` entry (its own app id and price) plus one more nginx service with a different `MODEL`.
 
 **Fixed pricing** is the natural fit: one call is one bounded unit of work, so the runner bills one flat price per call instead of metering time.
 
@@ -29,13 +33,14 @@ Everything the operator sets lives on the operator's side. `runners.json` names 
 ## Run offchain (free)
 
 ```sh
-HF_TOKEN=hf_... docker compose up -d --build
-curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # confirm livepeer-example/api-proxy registered
+cp .env.example .env   # fill in HF_TOKEN; ignore the on-chain block
+docker compose up -d
+curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # confirm livepeer-example/stable-diffusion-3-medium registered
 uv run client.py --prompt "a watercolor painting of a llama writing code"
 docker compose down
 ```
 
-`compose.yml` brings up an orchestrator (`-useLiveRunners -liveRunnerConfig`) and the app (proxying `https://router.huggingface.co`). The client builds the envelope for one text-to-image call, sends it through the orchestrator, and writes `api-proxy-out.jpg`.
+`compose.yml` brings up an orchestrator (`-useLiveRunners -liveRunnerConfig`) and the nginx runner. The client sends one prompt through the orchestrator and writes `api-proxy-out.jpg`.
 
 ## Run on-chain (paid)
 
@@ -43,7 +48,7 @@ Layer `compose.onchain.yml` to run the orchestrator on-chain with a remote signe
 
 ```sh
 cp .env.example .env   # fill in HF_TOKEN, RPC, network, keystore paths, accounts
-docker compose -f compose.yml -f compose.onchain.yml up -d --build
+docker compose -f compose.yml -f compose.onchain.yml up -d
 uv run client.py --prompt "a watercolor painting of a llama writing code" \
   --discovery https://localhost:8935/discovery \
   --signer http://localhost:7936

@@ -1,0 +1,29 @@
+# The whole runner: a stock nginx forwards each call to one pinned Hugging Face
+# model URL and injects the operator's token. The orchestrator health-polls
+# /health and reverse-proxies caller requests to /proxy. HF_TOKEN and MODEL are
+# substituted from the environment by the nginx image's template mechanism.
+server {
+    listen 8989;
+
+    location = /health {
+        default_type application/json;
+        return 200 '{"status":"ok"}';
+    }
+
+    # The pinned URL is the security model: the operator's credential can only
+    # be spent on exactly this model, callers choose nothing but the payload.
+    # Method and query string are part of "nothing": nginx would forward both
+    # upstream as the caller sent them, so pin the method and drop the args.
+    location = /proxy {
+        limit_except POST { deny all; }
+        set $args '';
+        proxy_pass https://router.huggingface.co/hf-inference/models/${MODEL};
+        proxy_set_header Authorization "Bearer ${HF_TOKEN}";
+        # Hugging Face content-negotiates: with the SDK's Accept:
+        # application/json it answers with a base64 PNG in a JSON string
+        # instead of the image. Ask for the image the runner promises.
+        proxy_set_header Accept "image/jpeg";
+        proxy_ssl_server_name on;
+        proxy_read_timeout 120s;  # a hosted diffusion model can take tens of seconds
+    }
+}

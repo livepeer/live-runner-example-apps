@@ -8,6 +8,7 @@ The smallest possible app on the Livepeer network: a synchronous request/respons
 | Runner mode  | single-shot                          |
 | Registration | dynamic (self-registers via the SDK) |
 | Transport    | HTTP (JSON request/response)         |
+| Pricing      | fixed (one price per call)           |
 | Port         | 8989                                 |
 
 Prerequisites (Docker, `uv`, and the not-yet-released `livepeer-gateway` SDK — pinned in `pyproject.toml`) and the shared on-chain/payment setup live in the [repo README](../README.md).

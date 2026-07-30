@@ -8,6 +8,7 @@ The live runner can also **pass calls through to an API that runs somewhere else
 | Runner mode  | single-shot                                |
 | Registration | static (orchestrator config + health poll) |
 | Transport    | HTTP (JSON envelope in, JSON/base64 out)   |
+| Pricing      | fixed (one price per call)                 |
 | Port         | 8989                                       |
 
 Prerequisites (Docker, `uv`, and the not-yet-released `livepeer-gateway` SDK — pinned in `pyproject.toml`) and the shared on-chain/payment setup live in the [repo README](../README.md). The demo upstream additionally needs a **Hugging Face API token** (`HF_TOKEN`, from [huggingface.co → settings → tokens](https://huggingface.co/settings/tokens)) with inference-provider credits.

@@ -19,6 +19,10 @@ server {
         set $args '';
         proxy_pass https://router.huggingface.co/hf-inference/models/${MODEL};
         proxy_set_header Authorization "Bearer ${HF_TOKEN}";
+        # Hugging Face content-negotiates: with the SDK's Accept:
+        # application/json it answers with a base64 PNG in a JSON string
+        # instead of the image. Ask for the image the runner promises.
+        proxy_set_header Accept "image/jpeg";
         proxy_ssl_server_name on;
         proxy_read_timeout 120s;  # a hosted diffusion model can take tens of seconds
     }

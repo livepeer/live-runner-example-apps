@@ -25,7 +25,7 @@ from livepeer_gateway.live_runner import call_runner
 from livepeer_gateway.selection import runner_selector
 
 DEFAULT_DISCOVERY = "https://localhost:8935/discovery"
-APP_ID = "livepeer-example/api-proxy"
+APP_ID = "livepeer-example/stable-diffusion-3-medium"
 DEFAULT_OUTPUT = "api-proxy-out.jpg"
 
 log = logging.getLogger("api-proxy-client")
@@ -56,8 +56,8 @@ async def main() -> None:
         runner = cursor.candidates[0]
         log.info("app_url=%s", runner.url)
 
-        # Streamed because the buffered path still assumes JSON; once
-        # livepeer-python-gateway#51 lands it returns result.raw (see #47).
+        # NOTE: Streamed because the buffered path still assumes JSON; once
+        # livepeer-python-gateway#51 lands it returns result.raw.
         stream = await call_runner(  # Livepeer: 2
             runner=runner,  # discovery metadata tells call_runner the price unit
             runner_url=runner.url.rstrip("/") + "/proxy",

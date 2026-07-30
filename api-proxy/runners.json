@@ -2,7 +2,7 @@
   "runners": [
     {
       "label": "api-proxy",
-      "app": "livepeer-example/api-proxy",
+      "app": "livepeer-example/stable-diffusion-3-medium",
       "runner_url": "http://app:8989",
       "health_url": "/health",
       "mode": "single-shot",

@@ -34,7 +34,8 @@ services:
     environment:
       # The operator-held upstream credential (huggingface.co → settings → tokens).
       - HF_TOKEN=${HF_TOKEN:?set HF_TOKEN in .env (copy .env.example)}
-      # The one model this runner offers; swap it here.
+      # The one model this runner offers; swap it here, and rename the app id
+      # in runners.json to match (the app id is what callers discover).
       - MODEL=stabilityai/stable-diffusion-3-medium-diffusers
     volumes:
       - ./nginx.conf.template:/etc/nginx/templates/default.conf.template:ro

@@ -2,14 +2,14 @@
 
 The live runner can also **pass calls through to an API that runs somewhere else** — here the **Hugging Face text-to-image inference API**. This example's runner is a **stock nginx**: [nginx.conf.template](nginx.conf.template) forwards each call to one pinned model URL and injects the operator's token. There is **no app code at all** — the orchestrator operator offers a hosted model ([Stable Diffusion 3 medium](https://huggingface.co/stabilityai/stable-diffusion-3-medium-diffusers) by default) as a paid capability with two config files.
 
-|              |                                            |
-| ------------ | ------------------------------------------ |
-| App id       | `livepeer-example/api-proxy`               |
-| Runner mode  | single-shot                                |
-| Registration | static (orchestrator config + health poll) |
-| Transport    | HTTP (HF payload in, JPEG bytes out)       |
-| Pricing      | fixed (one price per call)                 |
-| Port         | 8989                                       |
+|              |                                              |
+| ------------ | -------------------------------------------- |
+| App id       | `livepeer-example/stable-diffusion-3-medium` |
+| Runner mode  | single-shot                                  |
+| Registration | static (orchestrator config + health poll)   |
+| Transport    | HTTP (HF payload in, JPEG bytes out)         |
+| Pricing      | fixed (one price per call)                   |
+| Port         | 8989                                         |
 
 Prerequisites (Docker, `uv`, and the not-yet-released `livepeer-gateway` SDK — pinned in `pyproject.toml`) and the shared on-chain/payment setup live in the [repo README](../README.md). The demo upstream additionally needs a **Hugging Face API token** (`HF_TOKEN`, from [huggingface.co → settings → tokens](https://huggingface.co/settings/tokens)) with inference-provider credits.
 
@@ -20,6 +20,8 @@ The app is attached as a **static runner**: the orchestrator reads [runners.json
 ## Offering an API as a capability — what this shows
 
 Everything is operator-side config. `runners.json` names the capability and sets the **fixed per-image price**; the nginx config pins the model URL and holds the credential (`HF_TOKEN`, from `.env`). The pinned URL is also the security model: the operator's credential can only be spent on exactly the offered model. The config pins the method to `POST` and drops the caller's query string too, so the body is the only thing a caller controls: they choose nothing but the prompt, and never see an API key. They discover the capability and pay **per image through Livepeer**, while the operator pays the upstream and prices above the per-image upstream cost.
+
+The app id names the model, not the proxy, because that is what callers discover: they match it exactly, so it has to say what they get. Swapping `MODEL` means renaming the app id with it.
 
 Offering a second model is more config, not code: one more `runners.json` entry (its own app id and price) plus one more nginx service with a different `MODEL`.
 
@@ -33,7 +35,7 @@ Offering a second model is more config, not code: one more `runners.json` entry 
 ```sh
 cp .env.example .env   # fill in HF_TOKEN; ignore the on-chain block
 docker compose up -d
-curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # confirm livepeer-example/api-proxy registered
+curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # confirm livepeer-example/stable-diffusion-3-medium registered
 uv run client.py --prompt "a watercolor painting of a llama writing code"
 docker compose down
 ```

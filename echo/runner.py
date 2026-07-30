@@ -86,6 +86,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--orchSecret", default="abcdef")
     parser.add_argument("--runner-url", default=f"http://{DEFAULT_HOST}:{DEFAULT_PORT}")
     parser.add_argument("--host", default=DEFAULT_HOST)
+    parser.add_argument(
+        "--price",
+        type=float,
+        default=0,
+        help="Runner price in USD per hour (0 = free, the offchain default).",
+    )
     return parser.parse_args()
 
 
@@ -222,6 +228,9 @@ def main() -> None:
             runner_url=args.runner_url,
             app="livepeer-example/echo",
             mode="persistent",  # realtime trickle streaming is a held-open session
+            # Metered: the session is billed per second of wall-clock for as long
+            # as the client holds it, which is what a live stream costs.
+            price=args.price,  # USD per hour
         )
         log.info(
             "registered runner_id=%s orchestrator=%s",

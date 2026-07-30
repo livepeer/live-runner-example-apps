@@ -8,7 +8,7 @@ A realtime video app on the Livepeer network: it receives a live video stream ov
 | Runner mode  | persistent (held-open session)       |
 | Registration | dynamic (self-registers via the SDK) |
 | Transport    | trickle (realtime video in/out)      |
-| Pricing      | none (offchain only)                 |
+| Pricing      | hour (metered per second)            |
 | Port         | 8989                                 |
 
 Prerequisites (Docker, `uv`, the not-yet-released SDK) and the shared setup are in the [repo README](../README.md).
@@ -65,3 +65,20 @@ The `ffplay` low-delay flags (`-fflags nobuffer -flags low_delay -framedrop`) ke
 - `--radius N` sets the initial blur strength, `--max-frames N` stops early.
 
 Stop the stack with `docker compose down`.
+
+## Run on-chain (paid)
+
+Layer `compose.onchain.yml` to run the orchestrator on-chain with a remote signer paying for the session. This example showcases **metered pricing**: `PRICE` is USD per hour, billed per second for as long as the client holds the session, the natural fit for a stream with no fixed length. For the required RPC and wallets see [On-chain (paid) setup](../README.md#on-chain-paid-setup) in the repo README.
+
+```sh
+cp .env.example .env   # fill in RPC, network, keystore paths, accounts, pricing
+docker compose -f compose.yml -f compose.onchain.yml up -d --build
+uv run client.py ~/samples/bbb_720p.mp4 --mode blur \
+  --discovery https://localhost:8935/discovery \
+  --signer http://localhost:7936
+docker compose -f compose.yml -f compose.onchain.yml down
+```
+
+A metered session pays **more than once**. The upfront payment that answers the 402 challenge only buys the signer's preroll (about ten seconds), while the orchestrator keeps debiting every few seconds and releases the session on the first debit it cannot cover. So `reserve_session` keeps the session funded in the background for as long as the client holds it, and leaving the client's `async with session` block stops that before the session is released. A stream that outlives the preroll is the whole point of this example on-chain: watch `docker compose logs -f orchestrator` and you should see repeated payments, not one.
+
+That is the difference from `hello-world` and `tiles`, whose fixed pricing settles the entire bill upfront and starts no ticker.

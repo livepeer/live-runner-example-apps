@@ -30,10 +30,11 @@ curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # confirm l
 
 The input is a file path, or `-` to read an MPEG-TS stream from stdin (so you can pipe in anything ffmpeg produces); the output is a file, or `-` to write the echoed stream to stdout (pipe it to a player).
 
-**From a file** — writes the result to `echo-out.ts`:
+**From a file** — writes the result to `echo-out.ts`. Any video works; make one if you have nothing to hand (`-t` sets the length):
 
 ```sh
-uv run client.py --mode blur --discovery https://localhost:8935/discovery ~/samples/bbb_720p.mp4
+ffmpeg -f lavfi -i testsrc=size=1280x720:rate=30 -t 30 -c:v libx264 -preset ultrafast -pix_fmt yuv420p sample.mp4
+uv run client.py --mode blur --discovery https://localhost:8935/discovery sample.mp4
 ```
 
 **Live from ffmpeg's test pattern** — no file needed; watch the test counter echo back in real time:
@@ -73,12 +74,12 @@ Layer `compose.onchain.yml` to run the orchestrator on-chain with a remote signe
 ```sh
 cp .env.example .env   # fill in RPC, network, keystore paths, accounts, pricing
 docker compose -f compose.yml -f compose.onchain.yml up -d --build
-uv run client.py ~/samples/bbb_720p.mp4 --mode blur \
+uv run client.py sample.mp4 --mode blur \
   --discovery https://localhost:8935/discovery \
   --signer http://localhost:7936
 docker compose -f compose.yml -f compose.onchain.yml down
 ```
 
-A metered session pays **more than once**. The upfront payment that answers the 402 challenge only buys the signer's preroll (about ten seconds), while the orchestrator keeps debiting every few seconds and releases the session on the first debit it cannot cover. So `reserve_session` keeps the session funded in the background for as long as the client holds it, and leaving the client's `async with session` block stops that before the session is released. A stream that outlives the preroll is the whole point of this example on-chain: watch `docker compose logs -f orchestrator` and you should see repeated payments, not one.
+A metered session pays **more than once**. The upfront payment that answers the 402 challenge only buys the signer's preroll (about ten seconds), while the orchestrator keeps debiting every few seconds and releases the session on the first debit it cannot cover. So `reserve_session` keeps the session funded in the background for as long as the client holds it, and leaving the client's `async with session` block stops that before the session is released. A stream that outlives the preroll is the whole point of this example on-chain, so use a clip of at least a few tens of seconds (the 30s `sample.mp4` above is enough): watch `docker compose logs -f orchestrator` and you should see repeated payments, not one.
 
 That is the difference from `hello-world` and `tiles`, whose fixed pricing settles the entire bill upfront and starts no ticker.

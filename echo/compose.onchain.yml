@@ -6,7 +6,7 @@
 # issues a payment challenge. Requires a local .env (gitignored); copy .env.example
 # and fill it in. The session is metered, so a stream is billed for as long as it
 # runs. Then pay through the signer:
-#   uv run client.py ~/samples/clip.mp4 --mode blur \
+#   uv run client.py sample.mp4 --mode blur \
 #     --discovery https://localhost:8935/discovery \
 #     --signer http://localhost:7936
 

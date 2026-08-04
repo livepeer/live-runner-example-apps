@@ -19,6 +19,18 @@ The app is **dynamically registered**: it self-registers with the orchestrator v
 
 echo registers **dynamically** as the natural fit for a stateful app that already embeds the SDK (heartbeats, capacity, lifecycle). Trickle itself isn't tied to dynamic, though: `create_trickle_channels` rides the orchestrator's per-request `Livepeer-Session-Control` header, so a static runner exposing the same endpoints could open channels too.
 
+## Held-open sessions — what this shows
+
+**A trickle session is a pipe the client holds open, not a call it makes.** `hello-world`, `tiles` and `api-proxy` each answer one request and are finished. echo reserves a session once and then streams through it: frames go into the `in` channel and come back transformed from `out` continuously, with no request boundary in between.
+
+Two things follow from that, and they are what this example exists to show:
+
+- **The runner keeps state.** Each session owns its current transform and blur radius, which is why `POST /update` can change the effect mid-stream while frames keep flowing. A single-shot runner has nowhere to keep that between calls.
+- **Billing becomes a lifecycle.** There is no call to bill against, so the session is metered per second for as long as it is held, and payment repeats for the life of the stream instead of settling once. The [on-chain section](#run-on-chain-paid) below exercises exactly that.
+
+> [!NOTE]
+> The session ends when the client releases it, not when the input runs out, which is why the client calls `stop_runner_session` on the way out. echo registers the default capacity of 1, so one held session occupies the runner and `/discovery` reports `capacity_available: 0` until it is released. See [`tiles`](../tiles) for what capacity does under fan-out.
+
 ## Run offchain (free)
 
 Start the stack and confirm the runner registered:
@@ -85,3 +97,15 @@ The ffmpeg and webcam pipes above work the same way on-chain: add `--signer` to 
 A metered session pays **more than once**. The upfront payment that answers the 402 challenge only buys the signer's preroll (about ten seconds), while the orchestrator keeps debiting every few seconds and releases the session on the first debit it cannot cover. So `reserve_session` keeps the session funded in the background for as long as the client holds it, and leaving the client's `async with session` block stops that before the session is released. A stream that outlives the preroll is the whole point of this example on-chain, so use a clip of at least a few tens of seconds (the 30s `sample.mp4` above is enough): watch `docker compose logs -f orchestrator` and you should see repeated payments, not one.
 
 That is the difference from `hello-world` and `tiles`, whose fixed pricing settles the entire bill upfront and starts no ticker.
+
+## Run without Docker
+
+Start an orchestrator built from go-livepeer `v0.9.0` or newer (see [Build from source](https://docs.livepeer.org/v1/orchestrators/guides/install-go-livepeer#build-from-source)), then the app and client directly:
+
+```sh
+./livepeer -orchestrator -useLiveRunners -serviceAddr localhost:8935 -orchSecret abcdef -v 6
+uv run runner.py --orchestrator https://localhost:8935 --orchSecret abcdef
+uv run client.py --mode blur sample.mp4
+```
+
+The paid path needs a newer orchestrator than the offchain one: metered sessions rely on the session-scoped payment URL added after `v0.9.0` ([#4008](https://github.com/livepeer/go-livepeer/pull/4008)), which is why the compose files pin a master build.

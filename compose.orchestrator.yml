@@ -10,10 +10,15 @@
 #         service: orchestrator
 #
 # The go-livepeer image entrypoint is `livepeer`, so `command:` is flags only.
+#
+# Image: a master build, not a release tag. Metered sessions need the
+# session-scoped payment URL in the runner payment challenge (go-livepeer #4008),
+# which landed after v0.9.0; without it the SDK cannot keep a session funded.
+# Re-pin to the release tag once one ships with that change.
 
 services:
   orchestrator:
-    image: livepeer/go-livepeer:v0.9.0
+    image: livepeer/go-livepeer:sha-cc49228
     container_name: example_apps_orchestrator
     # Two distinct addresses:
     #   serviceAddr    advertised to external clients in discovery responses,

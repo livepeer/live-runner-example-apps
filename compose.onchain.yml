@@ -13,7 +13,8 @@
 
 services:
   signer:
-    image: livepeer/go-livepeer:v0.9.0
+    # Master build, matching the orchestrator; see compose.orchestrator.yml.
+    image: livepeer/go-livepeer:sha-cc49228
     container_name: example_apps_signer
     command:
       - -remoteSigner

@@ -51,7 +51,12 @@ services:
       # Price comes from the app's registration; -pricePerUnit only sets the
       # unused legacy base price, but an on-chain O won't boot without it.
       - -pricePerUnit=0
-      - -ticketEV=1000000000
+      # Expected value per ticket. It sets how many tickets one payment needs
+      # (fee / ticketEV), and the signer refuses to sign more than 100 at once.
+      # A metered session pays for a 10s window upfront, so at 1e9 the ceiling
+      # would be about 0.067 USD per hour, under what echo advertises. 1e10
+      # leaves room: echo's 0.10 per hour signs 15 tickets upfront, 6 per top-up.
+      - -ticketEV=10000000000
       - -maxFaceValue=4000000000000000
       - -monitor=false
       - -v=6

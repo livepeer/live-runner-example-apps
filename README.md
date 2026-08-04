@@ -110,7 +110,7 @@ Each example is self-contained and its README has the run commands. Everything b
 
 ### Prerequisites
 
-- **Docker** for the end-to-end demos. They use the mainline `livepeer/go-livepeer:v0.9.0` release image, so there is nothing to build.
+- **Docker** for the end-to-end demos, so there is nothing to build. They currently run a mainline `livepeer/go-livepeer` master build rather than a release image: metered pricing needs the session-scoped payment URL added after v0.9.0 ([#4008](https://github.com/livepeer/go-livepeer/pull/4008)). They move back to a release tag once one carries it.
 - **Python 3.12+** and [`uv`](https://docs.astral.sh/uv/) for the client.
 - The **`livepeer-gateway` SDK** from the `ja/live-runner` branch (not yet on PyPI):
 

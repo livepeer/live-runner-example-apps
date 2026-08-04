@@ -39,7 +39,7 @@ services:
       # Price comes from the app's registration; -pricePerUnit only sets the
       # unused legacy base price, but an on-chain O won't boot without it.
       - -pricePerUnit=0
-      - -ticketEV=1000000000
+      - -ticketEV=10000000000
       - -maxFaceValue=4000000000000000
       - -liveRunnerConfig=/config/runners.json
       - -monitor=false

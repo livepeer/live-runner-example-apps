@@ -133,7 +133,7 @@ On-chain runs add a **remote signer** that holds the payer wallet and mints [pro
 - **`.env` is per example and gitignored** — copy `.env.example` and fill in RPC, network, keystore paths, accounts, and pricing (it holds the keystore password).
 - **Runner price is a plain USD amount**: the app advertises `PRICE` (e.g. `0.01`). `currency` and `unit` default to `usd` / `hour`, so only `price` is required. With `hour` the orchestrator converts it to wei via the price feed and meters the session per second. Apps with bounded per-call work can register `unit="fixed"` to bill the price once per session (see hello-world, tiles). The signer caps what it pays at `MAX_PRICE_PER_UNIT`, compared per billing unit: one second of runtime when metered (0.000111USD is about 0.40 USD/hour), the whole session price when fixed.
 - **Payments are probabilistic** — on a short run you'll rarely see a redemption; that's expected.
-- **`--discovery` and `--signer` answer different questions**: where the runners are, and who pays. The demo signer runs without `-remoteDiscovery`, so the clients point discovery straight at the local orchestrator. A signer started with that flag serves `/discover-orchestrators` itself, and the client can pass `--signer` alone.
+- **`--discovery` and `--signer` answer different questions**: where the runners are, and who pays. The demo signer runs without `-remoteDiscovery`, so the clients point discovery straight at the local orchestrator. A signer started with that flag serves `/discover-orchestrators` itself; to use signer-based discovery with these example clients, pass an empty discovery value (e.g. `--discovery ''`) so the SDK can fall back to `--signer`.
 
 ### Verifying discovery
 

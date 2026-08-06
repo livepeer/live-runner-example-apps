@@ -1,0 +1,21 @@
+[project]
+name = "livepeer-streaming-asr"
+version = "0.1.0"
+description = "Streaming speech-to-text (WebSocket) example app for the Livepeer network."
+requires-python = ">=3.12"
+# Base deps are what the *client* needs (host `uv run client.py`). The runner's
+# ASR stack (faster-whisper) is the `runner` extra, installed in the Docker image.
+dependencies = [
+    "aiohttp",          # client WebSocket
+    "livepeer-gateway",
+]
+
+[project.optional-dependencies]
+runner = [
+    "faster-whisper",   # runner: streaming Whisper ASR
+    "numpy",
+]
+
+# livepeer-gateway is not on PyPI yet; pull it from the branch.
+[tool.uv.sources]
+livepeer-gateway = { git = "https://github.com/livepeer/livepeer-python-gateway", branch = "ja/live-runner" }

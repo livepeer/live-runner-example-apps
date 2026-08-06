@@ -42,10 +42,10 @@ curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # confirm l
 
 The input is a file path, or `-` to read an MPEG-TS stream from stdin (so you can pipe in anything ffmpeg produces); the output is a file, or `-` to write the echoed stream to stdout (pipe it to a player).
 
-**From a file** — writes the result to `echo-out.ts`. Any video works; make one if you have nothing to hand (`-t` sets the length):
+**From a file** — writes the result to `echo-out.ts`. Any video works; the first command makes a 30s one (`-t` sets the length):
 
 ```sh
-ffmpeg -f lavfi -i testsrc=size=1280x720:rate=30 -t 30 -c:v libx264 -preset ultrafast -pix_fmt yuv420p sample.mp4
+ffmpeg -f lavfi -i testsrc=size=1280x720:rate=30 -t 30 -c:v libx264 -preset ultrafast -pix_fmt yuv420p sample.mp4   # skip if you have a video
 uv run client.py --mode blur --discovery https://localhost:8935/discovery sample.mp4
 ```
 

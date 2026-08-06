@@ -199,7 +199,7 @@ async def main() -> None:
 
     try:
         session = await reserve_session(  # Livepeer: 1
-            discovery_url=args.discovery,
+            discovery_url=args.discovery,  # omit if the signer does discovery itself
             app=APP_ID,
             signer_url=args.signer.strip() or None,
         )

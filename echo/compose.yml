@@ -4,7 +4,7 @@
 # pulled in with `extends`; this file only adds the app. Once up, drive it from
 # the host with the SDK client and a sample video:
 #   docker compose up -d --build
-#   uv run client.py --blur ~/samples/clip.mp4   # writes echo-out.ts
+#   uv run client.py --mode blur sample.mp4   # writes echo-out.ts
 
 services:
   orchestrator:

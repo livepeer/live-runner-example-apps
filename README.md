@@ -37,13 +37,13 @@ Need a schema that isn't here? [Open an issue](https://github.com/livepeer/runne
 
 ## Examples
 
-| Example                        | Goal                                                                                  | Registration | Mode                               | Transport         | Pricing           |
-| ------------------------------ | ------------------------------------------------------------------------------------- | ------------ | ---------------------------------- | ----------------- | ----------------- |
-| [`hello-world`](./hello-world) | The simplest app: one request, one response                                           | dynamic      | single-shot                        | HTTP (JSON)       | fixed             |
-| [`tiles`](./tiles)             | Capacity fan-out — one call per tile                                                  | dynamic      | single-shot                        | HTTP (base64 PNG) | fixed             |
-| [`api-proxy`](./api-proxy)     | Pass calls through to a hosted API — the operator holds the key, callers pay per call | static       | single-shot                        | HTTP (JPEG bytes) | fixed             |
-| [`echo`](./echo)               | Realtime video, transformed and echoed back                                           | dynamic      | persistent                         | trickle           | — (offchain only) |
-| [`vllm`](./vllm)               | Drop-in OpenAI API; the client stays unmodified                                       | static       | persistent (single-shot by nature) | HTTP + SSE        | hour              |
+| Example                        | Goal                                                                                  | Registration | Mode                               | Transport         | Pricing |
+| ------------------------------ | ------------------------------------------------------------------------------------- | ------------ | ---------------------------------- | ----------------- | ------- |
+| [`hello-world`](./hello-world) | The simplest app: one request, one response                                           | dynamic      | single-shot                        | HTTP (JSON)       | fixed   |
+| [`tiles`](./tiles)             | Capacity fan-out — one call per tile                                                  | dynamic      | single-shot                        | HTTP (base64 PNG) | fixed   |
+| [`api-proxy`](./api-proxy)     | Pass calls through to a hosted API — the operator holds the key, callers pay per call | static       | single-shot                        | HTTP (JPEG bytes) | fixed   |
+| [`echo`](./echo)               | Realtime video, transformed and echoed back                                           | dynamic      | persistent                         | trickle           | hour    |
+| [`vllm`](./vllm)               | Drop-in OpenAI API; the client stays unmodified                                       | static       | persistent (single-shot by nature) | HTTP + SSE        | hour    |
 
 Start with `hello-world` (the smallest end-to-end path); the others each layer on one new idea. More will follow, including a full example that exercises every feature. Each is self-contained and runs **offchain** (free, no wallet); most also run **on-chain** (paid) — see each README.
 
@@ -110,7 +110,7 @@ Each example is self-contained and its README has the run commands. Everything b
 
 ### Prerequisites
 
-- **Docker** for the end-to-end demos. They use the mainline `livepeer/go-livepeer:v0.9.0` release image, so there is nothing to build.
+- **Docker** for the end-to-end demos, so there is nothing to build. They currently run a mainline `livepeer/go-livepeer` master build rather than a release image: metered pricing needs the session-scoped payment URL added after v0.9.0 ([#4008](https://github.com/livepeer/go-livepeer/pull/4008)). They move back to a release tag once one carries it.
 - **Python 3.12+** and [`uv`](https://docs.astral.sh/uv/) for the client.
 - The **`livepeer-gateway` SDK** from the `ja/live-runner` branch (not yet on PyPI):
 

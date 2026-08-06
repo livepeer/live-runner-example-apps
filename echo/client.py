@@ -6,9 +6,15 @@ frames back from `out`. Input/output can be files or stdin/stdout pipes, so you 
 chain `ffmpeg -> client -> ffplay`.
 
 Livepeer integration (grep `# Livepeer:`):
-  1. reserve_session()        — discover the runner, reserve a session
+  1. reserve_session()        — discover the runner, reserve a session. On the paid
+                                path it answers the 402 challenge and then keeps the
+                                session funded in the background, because the price is
+                                metered: the orchestrator debits every few seconds and
+                                releases the session on the first debit it cannot cover.
   2. MediaPublish/MediaOutput — publish frames to `in`, read echoed frames from `out`
-  3. stop_runner_session()    — end the session (settles payment on-chain)
+  3. stop_runner_session()    — end the session. Leaving the `async with` stops the
+                                funding first, so nothing is paid for a session that
+                                is about to go away.
 """
 
 from __future__ import annotations
@@ -51,6 +57,9 @@ def _parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--discovery", default=DEFAULT_DISCOVERY)
+    parser.add_argument(
+        "--signer", default="", help="Remote signer base URL (on-chain/paid path)."
+    )
     parser.add_argument(
         "--output",
         default=DEFAULT_OUTPUT,
@@ -189,41 +198,47 @@ async def main() -> None:
     session = None
 
     try:
-        session = await reserve_session(
-            discovery_url=args.discovery, app=APP_ID
-        )  # Livepeer: 1
+        session = await reserve_session(  # Livepeer: 1
+            discovery_url=args.discovery,  # omit if the signer does discovery itself
+            app=APP_ID,
+            signer_url=args.signer.strip() or None,
+        )
         log.info("session_id=%s app_url=%s", session.session_id, session.app_url)
 
-        echo = await post_json(
-            f"{session.app_url.rstrip('/')}/echo",
-            {"radius": args.radius, "mode": args.mode},
-        )
-        in_url = _channel_url(echo, "in")
-        out_url = _channel_url(echo, "out")
-        log.info("in=%s out=%s", in_url, out_url)
+        # The session funds itself while it is held; leaving this block stops that.
+        async with session:
+            echo = await post_json(
+                f"{session.app_url.rstrip('/')}/echo",
+                {"radius": args.radius, "mode": args.mode},
+            )
+            in_url = _channel_url(echo, "in")
+            out_url = _channel_url(echo, "out")
+            log.info("in=%s out=%s", in_url, out_url)
 
-        with (
-            nullcontext(sys.stdout.buffer) if output_stdout else output_path.open("wb")
-        ) as fh:
+            with (
+                nullcontext(sys.stdout.buffer)
+                if output_stdout
+                else output_path.open("wb")
+            ) as fh:
 
-            def _write_chunk(chunk: bytes) -> None:
-                fh.write(chunk)
-                if output_stdout:
-                    fh.flush()
+                def _write_chunk(chunk: bytes) -> None:
+                    fh.write(chunk)
+                    if output_stdout:
+                        fh.flush()
 
-            async with MediaOutput(
-                out_url, on_bytes=_write_chunk
-            ):  # Livepeer: 2 (read echoed frames)
-                await _publish_video(
-                    input_source,
-                    in_url,
-                    max_frames=max(0, args.max_frames),
-                    app_url=session.app_url,
-                    mode=args.mode,
-                    blur_period=args.blur_period,
-                )
-                log.info("publish complete; waiting for output to drain...")
-            fh.flush()
+                async with MediaOutput(
+                    out_url, on_bytes=_write_chunk
+                ):  # Livepeer: 2 (read echoed frames)
+                    await _publish_video(
+                        input_source,
+                        in_url,
+                        max_frames=max(0, args.max_frames),
+                        app_url=session.app_url,
+                        mode=args.mode,
+                        blur_period=args.blur_period,
+                    )
+                    log.info("publish complete; waiting for output to drain...")
+                fh.flush()
     except LivepeerGatewayError as exc:
         raise SystemExit(f"ERROR: {exc}") from exc
     finally:

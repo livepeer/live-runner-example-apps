@@ -8,7 +8,7 @@ A realtime video app on the Livepeer network: it receives a live video stream ov
 | Runner mode  | persistent (held-open session)       |
 | Registration | dynamic (self-registers via the SDK) |
 | Transport    | trickle (realtime video in/out)      |
-| Pricing      | none (offchain only)                 |
+| Pricing      | hour (metered per second)            |
 | Port         | 8989                                 |
 
 Prerequisites (Docker, `uv`, the not-yet-released SDK) and the shared setup are in the [repo README](../README.md).
@@ -18,6 +18,18 @@ Prerequisites (Docker, `uv`, the not-yet-released SDK) and the shared setup are 
 The app is **dynamically registered**: it self-registers with the orchestrator via `register_runner` ([runner.py](runner.py)) and exposes `POST /echo` (start a session, open trickle `in`/`out` channels with `create_trickle_channels`) and `POST /update` (change the transform mid-stream), both reverse-proxied through the orchestrator. The client calls it with `reserve_session` → `MediaPublish`/`MediaOutput` → `stop_runner_session` ([client.py](client.py)) — reserve a session, publish frames into `in`, read the transformed output from `out`, release. Grep `# Livepeer:` in either file to see the exact calls. Frame decode/encode is PyAV; the transforms are OpenCV.
 
 echo registers **dynamically** as the natural fit for a stateful app that already embeds the SDK (heartbeats, capacity, lifecycle). Trickle itself isn't tied to dynamic, though: `create_trickle_channels` rides the orchestrator's per-request `Livepeer-Session-Control` header, so a static runner exposing the same endpoints could open channels too.
+
+## Held-open sessions — what this shows
+
+**A trickle session is a pipe the client holds open, not a call it makes.** `hello-world`, `tiles` and `api-proxy` each answer one request and are finished. echo reserves a session once and then streams through it: frames go into the `in` channel and come back transformed from `out` continuously, with no request boundary in between.
+
+Two things follow from that, and they are what this example exists to show:
+
+- **The runner keeps state.** Each session owns its current transform and blur radius, which is why `POST /update` can change the effect mid-stream while frames keep flowing. A single-shot runner has nowhere to keep that between calls.
+- **Billing becomes a lifecycle.** There is no call to bill against, so the session is metered per second for as long as it is held, and payment repeats for the life of the stream instead of settling once. The [on-chain section](#run-on-chain-paid) below exercises exactly that.
+
+> [!NOTE]
+> The session ends when the client releases it, not when the input runs out, which is why the client calls `stop_runner_session` on the way out. echo registers the default capacity of 1, so one held session occupies the runner and `/discovery` reports `capacity_available: 0` until it is released. See [`tiles`](../tiles) for what capacity does under fan-out.
 
 ## Run offchain (free)
 
@@ -30,10 +42,11 @@ curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # confirm l
 
 The input is a file path, or `-` to read an MPEG-TS stream from stdin (so you can pipe in anything ffmpeg produces); the output is a file, or `-` to write the echoed stream to stdout (pipe it to a player).
 
-**From a file** — writes the result to `echo-out.ts`:
+**From a file** — writes the result to `echo-out.ts`. Any video works; the first command makes a 30s one (`-t` sets the length):
 
 ```sh
-uv run client.py --mode blur --discovery https://localhost:8935/discovery ~/samples/bbb_720p.mp4
+ffmpeg -f lavfi -i testsrc=size=1280x720:rate=30 -t 30 -c:v libx264 -preset ultrafast -pix_fmt yuv420p sample.mp4   # skip if you have a video
+uv run client.py --mode blur --discovery https://localhost:8935/discovery sample.mp4
 ```
 
 **Live from ffmpeg's test pattern** — no file needed; watch the test counter echo back in real time:
@@ -65,3 +78,32 @@ The `ffplay` low-delay flags (`-fflags nobuffer -flags low_delay -framedrop`) ke
 - `--radius N` sets the initial blur strength, `--max-frames N` stops early.
 
 Stop the stack with `docker compose down`.
+
+## Run on-chain (paid)
+
+Layer `compose.onchain.yml` to run the orchestrator on-chain with a remote signer paying for the session. This example showcases **metered pricing**: `PRICE` is USD per hour, billed per second for as long as the client holds the session, the natural fit for a stream with no fixed length. For the required RPC and wallets see [On-chain (paid) setup](../README.md#on-chain-paid-setup) in the repo README.
+
+```sh
+cp .env.example .env   # fill in RPC, network, keystore paths, accounts, pricing
+docker compose -f compose.yml -f compose.onchain.yml up -d --build
+uv run client.py sample.mp4 --mode blur \
+  --discovery https://localhost:8935/discovery \
+  --signer http://localhost:7936
+docker compose -f compose.yml -f compose.onchain.yml down
+```
+
+The ffmpeg and webcam pipes above work the same way on-chain: add `--signer` to the `client.py` in the pipeline. Without it the client stops at the payment challenge (`Live runner paid call requires signer_url`), which closes the pipe and leaves ffmpeg reporting `Broken pipe` — the paid stack refusing an unpaid caller, not a broken camera.
+
+A metered session pays **more than once**. The upfront payment that answers the 402 challenge only buys the signer's preroll (about ten seconds), while the orchestrator keeps debiting every few seconds and releases the session on the first debit it cannot cover. So `reserve_session` keeps the session funded in the background for as long as the client holds it, and leaving the client's `async with session` block stops that before the session is released. A stream that outlives the preroll is the whole point of this example on-chain, so use a clip of at least a few tens of seconds (the 30s `sample.mp4` above is enough): watch `docker compose logs -f orchestrator` and you should see repeated payments, not one.
+
+## Run without Docker
+
+Start an orchestrator built from go-livepeer `v0.9.0` or newer (see [Build from source](https://docs.livepeer.org/v1/orchestrators/guides/install-go-livepeer#build-from-source)), then the app and client directly:
+
+```sh
+./livepeer -orchestrator -useLiveRunners -serviceAddr localhost:8935 -orchSecret abcdef -v 6
+uv run runner.py --orchestrator https://localhost:8935 --orchSecret abcdef
+uv run client.py --mode blur sample.mp4
+```
+
+The paid path needs a newer orchestrator than the offchain one: metered sessions rely on the session-scoped payment URL added after `v0.9.0` ([#4008](https://github.com/livepeer/go-livepeer/pull/4008)), which is why the compose files pin a master build.

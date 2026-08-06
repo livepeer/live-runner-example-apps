@@ -38,7 +38,7 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8989
 MODES = frozenset({"echo", "gray", "invert", "blur"})
 
-state: "EchoSession | None" = None
+state: EchoSession | None = None
 
 
 @dataclass

@@ -177,14 +177,16 @@ async def _handle_echo(request: web.Request) -> web.Response:
     # for production apps, handle errors
     mode = _parse_mode(json.loads(await request.read()))
     # internal_url: runner-reachable address (same as the public url on a shared net).
-    publisher = MediaPublish(by_name["out"]["internal_url"])
+    publisher = MediaPublish(by_name["out"].get("internal_url", by_name["out"]["url"]))
 
     async def _on_frame(decoded) -> None:
         frame = _transform_frame(decoded, mode)
         if frame is not None:
             await publisher.write_frame(frame)
 
-    output = MediaOutput(by_name["in"]["internal_url"], on_frame=_on_frame)
+    output = MediaOutput(
+        by_name["in"].get("internal_url", by_name["in"]["url"]), on_frame=_on_frame
+    )
 
     # Hand public channel urls to the client, so it can send/receive media.
     state = EchoSession(

@@ -45,7 +45,8 @@ async def main() -> None:
     signer_url = args.signer.strip() or None
     try:
         cursor = await runner_selector(  # Livepeer: 1
-            discovery_url=args.discovery, app=APP_ID
+            discovery_url=args.discovery,  # omit if the signer does discovery itself
+            app=APP_ID,
         )
         runner = cursor.candidates[0]
         log.info("app_url=%s", runner.url)

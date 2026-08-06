@@ -72,7 +72,9 @@ def main() -> None:
         payload = await request.json()
         runner_path = request.path  # e.g. /v1/chat/completions
         session = await reserve_session(
-            discovery_url=args.discovery, app=APP_ID, signer_url=signer_url
+            discovery_url=args.discovery,  # omit if the signer does discovery itself
+            app=APP_ID,
+            signer_url=signer_url,
         )  # Livepeer: 1
 
         try:

@@ -108,7 +108,8 @@ async def _call_tile_with_retry(
     while True:
         try:
             cursor = await runner_selector(  # Livepeer: 1
-                discovery_url=discovery_url, app=APP_ID
+                discovery_url=discovery_url,  # omit if the signer does discovery itself
+                app=APP_ID,
             )
             runner = cursor.candidates[0]
             return await call_runner(  # Livepeer: 2

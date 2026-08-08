@@ -1,0 +1,23 @@
+# On-chain payment overlay for ollama. Layer it on the offchain base:
+#   docker compose -f compose.yml -f compose.onchain.yml up -d --build
+#
+# Adds the shared remote signer and re-points the orchestrator on-chain (see
+# ../compose.onchain.yml). Registration is dynamic, so there is no runners.json to
+# mount: the registrar advertises each model's price from PRICES. Requires a local
+# .env (gitignored); copy .env.example and fill it in. Then the gateway pays per
+# call through the signer:
+#   uv run gateway.py --signer http://localhost:7936 &
+#   uv run client.py --model qwen2.5:0.5b --prompt "Hello!"
+
+services:
+  signer:
+    extends:
+      file: ../compose.onchain.yml
+      service: signer
+    ports:
+      - "7936:7936"
+
+  orchestrator:
+    extends:
+      file: ../compose.onchain.yml
+      service: orchestrator

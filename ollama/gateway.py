@@ -24,7 +24,6 @@ long as the generation runs.
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 
 from aiohttp import web
@@ -43,28 +42,13 @@ log = logging.getLogger("ollama-gateway")
 
 
 def _app_id(model: str) -> str:
-    # Mirrors registrar.py: `llama3.2:1b` -> `ollama/llama3.2-1b`.
-    return f"{APP_NAMESPACE}/{model.strip().lower().replace(':', '-')}"
+    # Mirrors registrar.py: `llama3.2:1b` -> `ollama/llama3.2:1b`, verbatim.
+    return f"{APP_NAMESPACE}/{model.strip()}"
 
 
-def _model_name(runner: dict[str, object]) -> str:
-    """The exact name to send Ollama, which the registrar put in metadata.
-
-    The app id is a slug and cannot be reversed (`-` may have been `:`), so the
-    registrar advertises the real name. This is what metadata is for: app-specific
-    data the network doesn't model but a caller needs.
-    """
-    raw = runner.get("metadata")
-    if isinstance(raw, str) and raw:
-        try:
-            name = json.loads(raw).get("model")
-        except json.JSONDecodeError:
-            name = None
-        if isinstance(name, str) and name:
-            return name
-    # Fall back to the app id's suffix; wrong for names whose `-` was a `:`.
-    app = runner.get("app")
-    return str(app).split("/", 1)[-1] if isinstance(app, str) else ""
+def _model_of(app: str) -> str:
+    # ...and back again. Reversible because the id is not a slug.
+    return app.split("/", 1)[1] if "/" in app else app
 
 
 def _parse_args() -> argparse.Namespace:
@@ -89,19 +73,17 @@ def main() -> None:
     args = _parse_args()
     signer_url = args.signer.strip() or None
 
-    async def _discovered_models() -> list[dict[str, object]]:
+    async def _discovered_models() -> list[str]:
         # No app filter: discovery matches app ids exactly, with no prefix support,
         # so the family is selected here instead.
         entries = await discover_runners(discovery_url=args.discovery)  # Livepeer: 1
-        seen: dict[str, dict[str, object]] = {}
+        models: set[str] = set()
         for entry in entries:
             for runner in entry.get("runners", []):
                 app = runner.get("app")
                 if isinstance(app, str) and app.startswith(f"{APP_NAMESPACE}/"):
-                    seen.setdefault(_model_name(runner), runner)
-        return [
-            {"model": name, "runner": r} for name, r in sorted(seen.items()) if name
-        ]
+                    models.add(_model_of(app))
+        return sorted(m for m in models if m)
 
     async def _list_models(request: web.Request) -> web.StreamResponse:
         found = await _discovered_models()
@@ -109,12 +91,8 @@ def main() -> None:
             {
                 "object": "list",
                 "data": [
-                    {
-                        "id": item["model"],
-                        "object": "model",
-                        "owned_by": APP_NAMESPACE,
-                    }
-                    for item in found
+                    {"id": model, "object": "model", "owned_by": APP_NAMESPACE}
+                    for model in found
                 ],
             }
         )
@@ -132,8 +110,6 @@ def main() -> None:
         )
         runner = cursor.candidates[0]
         runner_url = runner.url.rstrip("/") + runner_path
-        # The app id is a slug; Ollama wants its own name back.
-        payload["model"] = _model_name(runner.raw)
 
         # When the OpenAI client asks for stream=True the runner replies with
         # text/event-stream; pipe those chunks straight through so tokens reach the

@@ -25,7 +25,7 @@ Three moving parts, and only one of them knows about Livepeer:
 
 **One model, one app id, one price.** A runner carries exactly one `mode` and one `price_info`, and discovery can only filter on `app`, so several capabilities means several registrations. `qwen2.5:0.5b` and `llama3.2:1b` are genuinely different products at different prices, and a caller picks between them the same way they pick between orchestrators.
 
-**The exact model name travels in `metadata`.** App ids are stable slugs, so `llama3.2:1b` becomes `ollama/llama3.2-1b` — and that cannot be reversed, since the `-` might have been a `:`. The registrar therefore advertises `{"model": "llama3.2:1b"}` in `metadata`, and the gateway uses it to rewrite the request before forwarding. That is exactly what metadata is for: app-specific data the network does not model but a caller needs.
+**The app id is the model name, verbatim.** `llama3.2:1b` registers as `ollama/llama3.2:1b` — go-livepeer only requires an app id be non-empty and trimmed, so there is no reason to slug it. Keeping it exact makes the mapping reversible in both directions, which is why nothing here needs a `metadata` field to restate the name: what you discover is what you send.
 
 **Listing models is free.** `GET /v1/models` is answered from `/discovery`, a plain GET with no session and no payment, so it reports what **the network** offers rather than what one container holds. Only the forward reserves a session — and because the runners are single-shot and metered, that call pays for as long as the generation runs.
 

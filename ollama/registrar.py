@@ -10,6 +10,9 @@ app, so every model is separately discoverable and separately priced. Nothing he
 is hardcoded except operator policy (prices), because which models exist is a fact
 about the container, not a choice.
 
+The app id is the model name verbatim, so a caller can send back exactly what it
+discovered and nothing has to restate the name elsewhere.
+
 Livepeer integration (grep `# Livepeer:`):
   1. register_runner() x N  -- one capability per model, all pointing at Ollama
 
@@ -23,7 +26,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import logging
 import os
 
@@ -36,9 +38,10 @@ log = logging.getLogger("ollama-registrar")
 
 
 def _app_id(model: str) -> str:
-    # `llama3.2:1b` -> `ollama/llama3.2-1b`. Lossy on purpose: app ids are stable
-    # slugs, so the exact name a caller must send travels in metadata instead.
-    return f"{APP_NAMESPACE}/{model.strip().lower().replace(':', '-')}"
+    # `llama3.2:1b` -> `ollama/llama3.2:1b`. The exact name, not a slug: go-livepeer
+    # only requires an app id be non-empty and trimmed, so keeping it verbatim means
+    # the mapping is reversible and nothing has to carry the real name separately.
+    return f"{APP_NAMESPACE}/{model.strip()}"
 
 
 def _parse_prices(raw: str) -> dict[str, float]:
@@ -126,8 +129,6 @@ async def main() -> None:
                 mode="single-shot",  # one request in, one response out
                 price=prices.get(model, args.price),  # USD/hour, metered while it runs
                 capacity=per_model,
-                # The slug cannot be reversed, so hand callers the exact name to send.
-                metadata=json.dumps({"model": model}),
             )
         )
         log.info("registered %s as %s (capacity=%d)", model, _app_id(model), per_model)

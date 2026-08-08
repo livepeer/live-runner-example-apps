@@ -1,5 +1,5 @@
 [project]
-name = "livepeer-streaming-asr"
+name = "livepeer-realtime-transcription"
 version = "0.1.0"
 description = "Streaming speech-to-text (WebSocket) example app for the Livepeer network."
 requires-python = ">=3.12"

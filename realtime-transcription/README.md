@@ -1,16 +1,17 @@
-# Streaming ASR app (WebSocket speech-to-text)
+# Realtime transcription app (WebSocket speech-to-text)
 
 Realtime speech-to-text on the Livepeer network over a **WebSocket** — the client streams audio _up_ and gets transcripts streamed _back_ on one socket. This is the example where WebSockets are genuinely required: HTTP can't stream audio upstream, and SSE is one-directional (server→client). The app is a small aiohttp server wrapping `faster-whisper` that **self-registers** (dynamic) — the dynamic, WebSocket counterpart to the static HTTP vLLM example.
 
-|              |                                          |
-| ------------ | ---------------------------------------- |
-| App id       | `livepeer-example/streaming-asr`         |
-| Runner mode  | persistent (held-open WebSocket session) |
-| Registration | dynamic (self-registers via the SDK)     |
-| Transport    | WebSocket (`/transcribe`)                |
-| Port         | 5005                                     |
+|              |                                           |
+| ------------ | ----------------------------------------- |
+| App id       | `livepeer-example/realtime-transcription` |
+| Runner mode  | persistent (held-open WebSocket session)  |
+| Registration | dynamic (self-registers via the SDK)      |
+| Model        | `large-v3-turbo` (faster-whisper, fixed)  |
+| Transport    | WebSocket (`/transcribe`)                 |
+| Port         | 5005                                      |
 
-The model is fixed at `base.en`, the size that keeps up with a live stream on CPU, so it runs anywhere; set `WHISPER_DEVICE=cuda` with a CUDA-enabled image for lower latency. Prerequisites (Docker, `uv`, the not-yet-released SDK) and the shared on-chain/payment setup are in the [repo README](../README.md).
+**Requires an NVIDIA GPU.** The model is fixed at `large-v3-turbo`: it swaps large-v3's 32-layer decoder for 4, so it runs far below realtime on a 3090 while staying near large-v3 quality. On CPU it loads but falls behind a live stream, which is the one thing this example is about. Prerequisites (Docker, `uv`, the not-yet-released SDK) and the shared on-chain/payment setup are in the [repo README](../README.md).
 
 ## How it's wired
 
@@ -18,7 +19,7 @@ The app is **dynamically registered**: it self-registers with the orchestrator v
 
 On-chain, the reserved session is the billing unit: `reserve_session` pays at reserve and the meter runs while the socket is open — continuous connection = continuous billing, the right model for live audio.
 
-**Staying realtime is the constraint.** A bigger Whisper is more accurate but stops keeping pace on CPU, and the app degrades by stretching out partials rather than dropping audio, so accuracy would be bought with lag. That is why the model is a constant here rather than a setting: serving a different one is a different app, with its own price and its own app id.
+**Staying realtime is the constraint,** and it is why the model is a constant rather than a setting. The app degrades by stretching out partials rather than dropping audio, so a model that cannot keep pace buys accuracy with unbounded lag instead of failing loudly. Serving a different model is a different app, with its own price and its own app id — which is why the id names the capability (`realtime-transcription`) and not the technique.
 
 **Realtime design:** the receive loop only appends audio (never blocking on the model); a background worker transcribes the _current utterance_ (bounded to 15s) every ~0.5s, emits partials, and finalizes on trailing silence or max length — so cost stays bounded no matter how long the stream runs, instead of re-transcribing an ever-growing buffer. It uses the low-latency Whisper preset (`beam_size=1`, no cross-segment conditioning). For production-grade streaming you'd reach for a LocalAgreement approach (whisper_streaming / WhisperLive).
 
@@ -43,7 +44,7 @@ Use a clip with a couple of sentences and a pause between them: the app finalize
 
 ```sh
 docker compose up -d --build      # first run downloads the whisper model
-curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # confirm livepeer-example/streaming-asr registered
+curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # confirm livepeer-example/realtime-transcription registered
 uv run client.py --discovery https://localhost:8935/discovery --file sample.wav
 docker compose down
 ```

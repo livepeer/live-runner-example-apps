@@ -16,7 +16,7 @@ on:
       - "hello-world/**"
       - "echo/**"
       - "tiles/**"
-      - "streaming-asr/**"
+      - "realtime-transcription/**"
       - ".github/workflows/images.yml"
   pull_request:
     paths: *image_paths
@@ -35,7 +35,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        example: [hello-world, echo, tiles, streaming-asr]
+        example: [hello-world, echo, tiles, realtime-transcription]
     steps:
       - uses: actions/checkout@v7
 

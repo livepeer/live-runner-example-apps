@@ -6,7 +6,7 @@
 #
 # The orchestrator is defined once in ../compose.orchestrator.yml and pulled in
 # with `extends`. The app embeds the SDK and registers itself, like hello-world.
-# CPU by default, so it runs anywhere.
+# Requires an NVIDIA GPU: the pinned model only keeps pace on one.
 
 services:
   orchestrator:
@@ -16,7 +16,7 @@ services:
 
   app:
     build: .
-    container_name: example_apps_streaming_asr
+    container_name: example_apps_realtime_transcription
     # Wait for the orchestrator's healthcheck so registration doesn't race its boot.
     depends_on:
       orchestrator:
@@ -28,5 +28,13 @@ services:
       - --orchestrator=https://orchestrator:8935
       - --orchSecret=abcdef
       - --runner-url=http://app:5005
-      - --device=${WHISPER_DEVICE:-cpu}
-      - --compute-type=${WHISPER_COMPUTE:-int8}
+      - --device=${WHISPER_DEVICE:-cuda}
+      - --compute-type=${WHISPER_COMPUTE:-float16}
+    # large-v3-turbo needs the GPU to stay ahead of a live stream.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

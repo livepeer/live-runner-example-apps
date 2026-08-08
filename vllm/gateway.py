@@ -42,6 +42,9 @@ from livepeer_gateway.live_runner import call_runner
 from livepeer_gateway.selection import runner_selector
 
 APP_ID = "vllm/qwen2.5-0.5b-instruct"
+# A generation runs far longer than the SDK's 5s default, and the whole point here
+# is that a metered single-shot call pays for as long as it takes.
+REQUEST_TIMEOUT = 300.0
 
 log = logging.getLogger("vllm-gateway")
 
@@ -69,7 +72,8 @@ def main() -> None:
     signer_url = args.signer.strip() or None
 
     async def _forward(request: web.Request) -> web.StreamResponse:
-        payload = await request.json()
+        # GET /v1/models carries no body; everything else posts JSON.
+        payload = await request.json() if request.can_read_body else {}
         runner_path = request.path  # e.g. /v1/chat/completions
         cursor = await runner_selector(  # Livepeer: 1
             discovery_url=args.discovery,  # omit if the signer does discovery itself
@@ -87,6 +91,8 @@ def main() -> None:
                 runner_url=runner_url,
                 payload=payload,
                 signer_url=signer_url,
+                method=request.method,
+                timeout=REQUEST_TIMEOUT,
                 stream=True,
             ) as stream:
                 resp = web.StreamResponse(
@@ -108,6 +114,8 @@ def main() -> None:
             runner_url=runner_url,
             payload=payload,
             signer_url=signer_url,
+            method=request.method,
+            timeout=REQUEST_TIMEOUT,
         )
         return web.json_response(result.data)
 
@@ -123,7 +131,10 @@ def main() -> None:
             )
 
     app = web.Application()
-    app.router.add_post("/v1/{tail:.*}", _forward_or_error)  # forward every OpenAI path
+    # Every verb, not just POST: an OpenAI client lists models with GET /v1/models.
+    # That listing is a real single-shot call, so it reserves a session and, on-chain,
+    # pays for it -- a production gateway would cache it; an example should not hide it.
+    app.router.add_route("*", "/v1/{tail:.*}", _forward_or_error)
     log.info(
         "gateway on http://%s:%d/v1 -> %s (signer=%s)",
         args.host,

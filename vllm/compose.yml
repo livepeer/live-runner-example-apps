@@ -29,11 +29,11 @@ services:
   vllm:
     image: vllm/vllm-openai:latest
     container_name: example_apps_vllm
-    # Tiny model (override with VLLM_MODEL); --gpu-memory-utilization caps VRAM so
-    # vLLM starts on a shared GPU (its 0.9 default can exceed free memory).
+    # Pinned, not a knob: runners.json advertises this model by name, so change both
+    # together. --gpu-memory-utilization caps VRAM (0.9 default can exceed free).
     command:
       - "--model"
-      - "${VLLM_MODEL:-Qwen/Qwen2.5-0.5B-Instruct}"
+      - "Qwen/Qwen2.5-0.5B-Instruct"
       - "--port"
       - "8000"
       - "--gpu-memory-utilization"

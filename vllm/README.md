@@ -11,7 +11,7 @@ Runs an OpenAI-compatible LLM on the Livepeer network and consumes it with the *
 | Pricing      | hour (metered per second of session)       |
 | Port         | 8000 (vLLM), 8080 (gateway)                |
 
-**Requires an NVIDIA GPU** for vLLM. The default model (`Qwen/Qwen2.5-0.5B-Instruct`) is tiny so it fits a modest card can be overridden with `VLLM_MODEL`. Prerequisites (Docker, `uv`, the not-yet-released SDK) and the shared on-chain/payment setup are in the [repo README](../README.md).
+**Requires an NVIDIA GPU** for vLLM. The model (`Qwen/Qwen2.5-0.5B-Instruct`) is tiny so it fits a modest card; serving a different one means changing `compose.yml` and `runners.json` together. Prerequisites (Docker, `uv`, the not-yet-released SDK) and the shared on-chain/payment setup are in the [repo README](../README.md).
 
 > [!NOTE]
 > This app is single-shot by nature but currently registers as **persistent**. It will switch to **single-shot** once [#5](https://github.com/livepeer/runner-app-examples/issues/5) lands.
@@ -39,7 +39,7 @@ uv run client.py --prompt "In one sentence, what is Livepeer?"
 kill %1; docker compose down           # stop the gateway, then the stack
 ```
 
-`client.py` is stock `openai` with `base_url=http://localhost:8080/v1` (the `api_key` is ignored — it just needs _a_ value). Pass a `--model` that matches `VLLM_MODEL`, the name vLLM serves under. Any OpenAI tool works the same way — e.g. `curl`:
+`client.py` is stock `openai` with `base_url=http://localhost:8080/v1` (the `api_key` is ignored — it just needs _a_ value). Pass a `--model` that matches the name vLLM serves under. Any OpenAI tool works the same way — e.g. `curl`:
 
 ```sh
 curl http://localhost:8080/v1/chat/completions \

@@ -1,6 +1,6 @@
 # Echo app (trickle realtime video)
 
-A realtime video app on the Livepeer network: it receives a live video stream over **trickle** channels, optionally transforms each frame (gray / invert / blur), and echoes it back. This is the **live/stateful** path — continuous media over trickle, not request/response — so the app embeds the SDK and self-registers (dynamic).
+A realtime video app on the Livepeer network: it receives a live video stream over **trickle** channels, optionally transforms each frame (gray / invert / blur) or the audio (robot), and echoes it back. This is the **live/stateful** path — continuous media over trickle, not request/response — so the app embeds the SDK and self-registers (dynamic).
 
 |              |                                      |
 | ------------ | ------------------------------------ |
@@ -73,9 +73,26 @@ Swap `/dev/video0` for your node. If that size/format isn't supported, list the 
 
 The `ffplay` low-delay flags (`-fflags nobuffer -flags low_delay -framedrop`) keep the preview close to realtime; drop them and it buffers.
 
-- `--mode` picks the transform: `echo` (passthrough, the default), `gray`, `invert`, or `blur`. Use `--mode blur` on any command above to see the echo visibly transform the stream.
+- `--mode` picks the transform: `echo` (passthrough, the default), `gray`, `invert`, `blur`, or `robot`. Use `--mode blur` on any command above to see the echo visibly transform the stream.
+- `robot` ring-modulates the audio and leaves the video alone. It is the only mode that publishes an audio track, since a declared track that never gets a frame stalls the stream.
 - `blur` sweeps the radius `0 -> max -> 0` live (driving `/update`); `--blur-period N` sets the seconds per sweep cycle (default 2; larger is slower). `gray`/`invert` are static.
 - `--radius N` sets the initial blur strength, `--max-frames N` stops early.
+
+**Hearing `robot`** — every command above is video-only, so `robot` would refuse them. Record yourself with a microphone (`arecord -l` lists capture devices), then play both files:
+
+```sh
+ffmpeg -f v4l2 -input_format mjpeg -video_size 1280x720 -framerate 30 -i /dev/video0 \
+  -f alsa -i plughw:1,0 -filter_complex "[1:a]aresample=async=1:first_pts=0[a]" \
+  -map 0:v -map "[a]" -fps_mode cfr -t 10 \
+  -c:v libx264 -preset ultrafast -pix_fmt yuv420p -g 30 -c:a aac -ar 48000 -f mpegts -y me.ts
+
+uv run client.py --mode robot --output me-robot.ts me.ts
+ffplay -autoexit me.ts && ffplay -autoexit me-robot.ts   # you, then you ring-modulated
+```
+
+To hear it live instead, keep the same capture and swap the tail for `--output - -` piped into `ffplay -fflags nobuffer -i -`. Expect 2 to 4 seconds of lag, since trickle publishes in 2s segments, and wear headphones or the mic re-records the playback.
+
+The camera and the audio device are separate clocks, so `aresample` and `-fps_mode cfr` align them; without both the publisher fails at the first segment boundary. On a multi-input interface add `-channels 6` and pick one input with `pan=mono|c0=c0`.
 
 Stop the stack with `docker compose down`.
 

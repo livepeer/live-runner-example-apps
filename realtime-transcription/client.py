@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""streaming-asr client: reserve a session, stream audio over WebSocket, settle up.
+"""realtime-transcription client: reserve a session, stream audio over WebSocket, settle up.
 
 One SDK call reserves a session; from there it's a standard WebSocket — the
 orchestrator proxies the upgrade straight to the app. Audio is streamed up in
@@ -29,11 +29,11 @@ from livepeer_gateway.live_runner import stop_runner_session
 from livepeer_gateway.selection import reserve_session
 
 DEFAULT_DISCOVERY = "https://localhost:8935/discovery"
-APP_ID = "livepeer-example/streaming-asr"
+APP_ID = "livepeer-example/realtime-transcription"
 SAMPLE_RATE = 16000
 CHUNK_MS = 100
 
-log = logging.getLogger("streaming-asr-client")
+log = logging.getLogger("realtime-transcription-client")
 
 
 def _parse_args() -> argparse.Namespace:

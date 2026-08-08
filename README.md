@@ -31,20 +31,20 @@ The orchestrator is a **transparent reverse proxy**: every endpoint you expose i
 - **HTTP** request/response — the common case. (`hello-world`, `tiles`, `api-proxy`)
 - **HTTP + SSE** — streamed / token responses. (`vllm`)
 - **Trickle** — continuous realtime video in/out. (`echo`)
-- **WebSocket** — long-lived bidirectional sessions. (`streaming-asr`)
+- **WebSocket** — long-lived bidirectional sessions. (`realtime-transcription`)
 
 Need a schema that isn't here? [Open an issue](https://github.com/livepeer/runner-app-examples/issues).
 
 ## Examples
 
-| Example                        | Goal                                                                                  | Registration | Mode        | Transport         | Pricing |
-| ------------------------------ | ------------------------------------------------------------------------------------- | ------------ | ----------- | ----------------- | ------- |
-| [`hello-world`](./hello-world) | The simplest app: one request, one response                                           | dynamic      | single-shot | HTTP (JSON)       | fixed   |
-| [`tiles`](./tiles)             | Capacity fan-out — one call per tile                                                  | dynamic      | single-shot | HTTP (base64 PNG) | fixed   |
-| [`api-proxy`](./api-proxy)     | Pass calls through to a hosted API — the operator holds the key, callers pay per call | static       | single-shot | HTTP (JPEG bytes) | fixed   |
-| [`echo`](./echo)               | Realtime video, transformed and echoed back                                           | dynamic      | persistent  | trickle           | hour    |
-| [`vllm`](./vllm)               | Drop-in OpenAI API; the client stays unmodified                                       | static       | single-shot | HTTP + SSE        | hour    |
-| [`streaming-asr`](./streaming-asr) | Audio up, transcripts back, on one socket | dynamic | persistent | WebSocket | hour |
+| Example                                              | Goal                                                                                  | Registration | Mode        | Transport         | Pricing |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------ | ----------- | ----------------- | ------- |
+| [`hello-world`](./hello-world)                       | The simplest app: one request, one response                                           | dynamic      | single-shot | HTTP (JSON)       | fixed   |
+| [`tiles`](./tiles)                                   | Capacity fan-out — one call per tile                                                  | dynamic      | single-shot | HTTP (base64 PNG) | fixed   |
+| [`api-proxy`](./api-proxy)                           | Pass calls through to a hosted API — the operator holds the key, callers pay per call | static       | single-shot | HTTP (JPEG bytes) | fixed   |
+| [`echo`](./echo)                                     | Realtime video, transformed and echoed back                                           | dynamic      | persistent  | trickle           | hour    |
+| [`vllm`](./vllm)                                     | Drop-in OpenAI API; the client stays unmodified                                       | static       | single-shot | HTTP + SSE        | hour    |
+| [`realtime-transcription`](./realtime-transcription) | Audio up, transcripts back, on one socket                                             | dynamic      | persistent  | WebSocket         | hour    |
 
 Start with `hello-world` (the smallest end-to-end path); the others each layer on one new idea. More will follow, including a full example that exercises every feature. Each is self-contained and runs **offchain** (free, no wallet); most also run **on-chain** (paid) — see each README.
 
@@ -54,7 +54,7 @@ This set stays **minimal and curated**: it covers each value of the axes above (
 
 How the app attaches to the orchestrator:
 
-- **Dynamic** — the app self-registers via the SDK (`register_runner`) and heartbeats; the orchestrator drops it when heartbeats stop. Best for apps that come and go. (`hello-world`, `echo`, `streaming-asr`)
+- **Dynamic** — the app self-registers via the SDK (`register_runner`) and heartbeats; the orchestrator drops it when heartbeats stop. Best for apps that come and go. (`hello-world`, `echo`, `realtime-transcription`)
 - **Static** — the orchestrator is configured with the app's URL in a `runners.json` and health-polls it; the app needs no SDK. Best for fixed, long-running deployments. (`vllm`, `api-proxy`)
 
 Both forms also take an optional **`metadata`** string: up to 1 KB of app-controlled UTF-8, echoed back in `/discovery` and never read by the orchestrator. Use it to pass callers app-specific detail the protocol doesn't model, such as a context window or the languages a model handles; clients read it off the discovered runner, as `cursor.candidates[0].raw["metadata"]` after `runner_selector`, or `session.runner.raw["metadata"]` after `reserve_session`. Anything a caller **selects or pays differently for** belongs in the app id instead, which is the only key discovery can filter — none of the examples here need `metadata` for that reason.
@@ -77,7 +77,7 @@ flowchart LR
 
 Chosen _at_ registration (above); **defaults to `persistent`** — set on both `register_runner(...)` and in `runners.json`. The examples set it explicitly.
 
-- **Persistent** — a held-open session the client reserves and releases, billed per second of wall-clock (or once, with fixed pricing). Best for realtime / streaming. (`echo`, `streaming-asr`)
+- **Persistent** — a held-open session the client reserves and releases, billed per second of wall-clock (or once, with fixed pricing). Best for realtime / streaming. (`echo`, `realtime-transcription`)
 - **Single-shot** — one request in, one response out; the orchestrator reserves a session per call and releases it when the response returns, so the client manages no session at all. Best for batch / request-response. With metered pricing the call pays for as long as it runs, so the work need not be short. (`hello-world`, `tiles`, `api-proxy`, `vllm`)
 
 ## Calling your app
@@ -85,7 +85,7 @@ Chosen _at_ registration (above); **defaults to `persistent`** — set on both `
 The client side depends on the runner's mode:
 
 - **Single-shot** — **discover → call**: find the app via `runner_selector`, then one `call_runner`. The orchestrator reserves a session for the call and releases it when the response returns; on the paid path `call_runner` answers the 402 payment challenge inline. (`hello-world`, `tiles`, `api-proxy`, `vllm`)
-- **Persistent** — **discover → reserve → call → release**: reserve a session (`reserve_session`), call it — `call_runner`, streamed frames, or a WebSocket, depending on transport — then release it (`stop_runner_session`), which settles payment on-chain. (`echo`, `streaming-asr`)
+- **Persistent** — **discover → reserve → call → release**: reserve a session (`reserve_session`), call it — `call_runner`, streamed frames, or a WebSocket, depending on transport — then release it (`stop_runner_session`), which settles payment on-chain. (`echo`, `realtime-transcription`)
 
 Each example's `client.py` shows its exact calls — grep `# Livepeer:` to find them.
 

@@ -30,6 +30,6 @@ services:
       - --orchestrator=https://orchestrator:8935
       - --orchSecret=abcdef
       - --runner-url=http://app:5005
-      - --device=${WHISPER_DEVICE:-cpu}
-      - --compute-type=${WHISPER_COMPUTE:-int8}
+      - --device=${WHISPER_DEVICE:-cuda}
+      - --compute-type=${WHISPER_COMPUTE:-float16}
       - --price=${PRICE}

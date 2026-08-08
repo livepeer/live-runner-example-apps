@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""streaming-asr app: realtime speech-to-text over WebSocket — a Live Runner app.
+"""realtime-transcription app: realtime speech-to-text over WebSocket — a Live Runner app.
 
 The WebSocket showcase: the client streams raw audio *up* and gets transcripts
 streamed *back* over one socket — something HTTP can't do (no upstream stream)
@@ -38,11 +38,13 @@ from livepeer_gateway.live_runner import register_runner
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 5005
-APP_ID = "livepeer-example/streaming-asr"
-# Fixed, not a knob: this example is about realtime transcription, and base.en is
-# the size that keeps up with a live stream on CPU. Bigger models are more accurate
-# but stop being realtime without a GPU, which is a different app, not a setting.
-WHISPER_MODEL = "base.en"
+APP_ID = "livepeer-example/realtime-transcription"
+# Fixed, not a knob: this example is about realtime transcription, so it pins the
+# model that is both accurate and fast enough to keep pace. large-v3-turbo swaps
+# large-v3's 32-layer decoder for 4, so it runs far below realtime on a 3090 while
+# staying near large-v3 quality. Serving a different model is a different app, with
+# its own price and app id, not a setting on this one.
+WHISPER_MODEL = "large-v3-turbo"
 
 SAMPLE_RATE = 16000
 BYTES_PER_SEC = SAMPLE_RATE * 2  # int16 mono
@@ -88,7 +90,7 @@ def _transcribe(pcm: bytes) -> str:
     return " ".join(s.text.strip() for s in segments).strip()
 
 
-log = logging.getLogger("streaming-asr")
+log = logging.getLogger("realtime-transcription")
 
 
 async def _handle_transcribe(request: web.Request) -> web.WebSocketResponse:

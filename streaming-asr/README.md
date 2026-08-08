@@ -10,13 +10,15 @@ Realtime speech-to-text on the Livepeer network over a **WebSocket** — the cli
 | Transport    | WebSocket (`/transcribe`)                |
 | Port         | 5005                                     |
 
-Runs on **CPU by default** so it works anywhere; set `WHISPER_DEVICE=cuda` with a CUDA-enabled image for lower latency. Prerequisites (Docker, `uv`, the not-yet-released SDK) and the shared on-chain/payment setup are in the [repo README](../README.md).
+The model is fixed at `base.en`, the size that keeps up with a live stream on CPU, so it runs anywhere; set `WHISPER_DEVICE=cuda` with a CUDA-enabled image for lower latency. Prerequisites (Docker, `uv`, the not-yet-released SDK) and the shared on-chain/payment setup are in the [repo README](../README.md).
 
 ## How it's wired
 
 The app is **dynamically registered**: it self-registers with the orchestrator via `register_runner` ([runner.py](runner.py)) and exposes a `GET /transcribe` WebSocket, whose upgrade the orchestrator proxies straight through — your app speaks standard WS, nothing Livepeer-specific in the socket. The client calls it with `reserve_session` → `ws_connect` → `stop_runner_session` ([client.py](client.py)) — reserve a session, open a `wss://` socket to the session URL, stream audio up / transcripts back, release. Grep `# Livepeer:` in either file to see the exact calls.
 
 On-chain, the reserved session is the billing unit: `reserve_session` pays at reserve and the meter runs while the socket is open — continuous connection = continuous billing, the right model for live audio.
+
+**Staying realtime is the constraint.** A bigger Whisper is more accurate but stops keeping pace on CPU, and the app degrades by stretching out partials rather than dropping audio, so accuracy would be bought with lag. That is why the model is a constant here rather than a setting: serving a different one is a different app, with its own price and its own app id.
 
 **Realtime design:** the receive loop only appends audio (never blocking on the model); a background worker transcribes the _current utterance_ (bounded to 15s) every ~0.5s, emits partials, and finalizes on trailing silence or max length — so cost stays bounded no matter how long the stream runs, instead of re-transcribing an ever-growing buffer. It uses the low-latency Whisper preset (`beam_size=1`, no cross-segment conditioning). For production-grade streaming you'd reach for a LocalAgreement approach (whisper_streaming / WhisperLive).
 

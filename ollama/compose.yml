@@ -47,6 +47,8 @@ services:
     image: ollama/ollama:latest
     environment:
       - OLLAMA_HOST=http://ollama:11434
+      # Must be in the container's env: the $$ below defers expansion to its shell.
+      - MODELS=${MODELS:-qwen2.5:0.5b llama3.2:1b}
     depends_on:
       ollama:
         condition: service_healthy

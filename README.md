@@ -45,7 +45,7 @@ Need a schema that isn't here? [Open an issue](https://github.com/livepeer/runne
 | [`echo`](./echo)                                     | Realtime video, transformed and echoed back                                           | dynamic      | persistent  | trickle           | hour    |
 | [`vllm`](./vllm)                                     | Drop-in OpenAI API; the client stays unmodified                                       | static       | single-shot | HTTP + SSE        | hour    |
 | [`realtime-transcription`](./realtime-transcription) | Audio up, transcripts back, on one socket                                             | dynamic      | persistent  | WebSocket         | hour    |
-| [`ollama`](./ollama) | One container, several models, each its own priced app | dynamic | single-shot | HTTP + SSE | hour |
+| [`ollama`](./ollama)                                 | One container, several models, each its own priced app                                | dynamic      | single-shot | HTTP + SSE        | hour    |
 
 Start with `hello-world` (the smallest end-to-end path); the others each layer on one new idea. More will follow, including a full example that exercises every feature. Each is self-contained and runs **offchain** (free, no wallet); most also run **on-chain** (paid) — see each README.
 

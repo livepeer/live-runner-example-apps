@@ -29,11 +29,14 @@ services:
   vllm:
     image: vllm/vllm-openai:latest
     container_name: example_apps_vllm
-    # Tiny model (override with VLLM_MODEL); --gpu-memory-utilization caps VRAM so
+    # The model is pinned, not an env knob: runners.json advertises it by name, and
+    # a static runner has no code to recompute that id, so a knob here would make the
+    # app id a lie the orchestrator republishes. Serving another model means editing
+    # this command and runners.json together. --gpu-memory-utilization caps VRAM so
     # vLLM starts on a shared GPU (its 0.9 default can exceed free memory).
     command:
       - "--model"
-      - "${VLLM_MODEL:-Qwen/Qwen2.5-0.5B-Instruct}"
+      - "Qwen/Qwen2.5-0.5B-Instruct"
       - "--port"
       - "8000"
       - "--gpu-memory-utilization"

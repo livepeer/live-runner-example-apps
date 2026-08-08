@@ -56,6 +56,8 @@ How the app attaches to the orchestrator:
 - **Dynamic** — the app self-registers via the SDK (`register_runner`) and heartbeats; the orchestrator drops it when heartbeats stop. Best for apps that come and go. (`hello-world`, `echo`)
 - **Static** — the orchestrator is configured with the app's URL in a `runners.json` and health-polls it; the app needs no SDK. Best for fixed, long-running deployments. (`vllm`, `api-proxy`)
 
+Both forms also take an optional **`metadata`** string: up to 1 KB of app-controlled UTF-8, echoed back in `/discovery` and never read by the orchestrator. Use it to pass callers app-specific detail the protocol doesn't model, such as a context window or the languages a model handles; clients read it off the discovered runner, as `cursor.candidates[0].raw["metadata"]` after `runner_selector`, or `session.runner.raw["metadata"]` after `reserve_session`. Anything a caller **selects or pays differently for** belongs in the app id instead, which is the only key discovery can filter — none of the examples here need `metadata` for that reason.
+
 The arrow flips — dynamic, the app announces itself; static, the orchestrator is told about a passive app:
 
 ```mermaid

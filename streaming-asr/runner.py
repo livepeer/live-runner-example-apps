@@ -39,6 +39,10 @@ from livepeer_gateway.live_runner import register_runner
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 5005
 APP_ID = "livepeer-example/streaming-asr"
+# Fixed, not a knob: this example is about realtime transcription, and base.en is
+# the size that keeps up with a live stream on CPU. Bigger models are more accurate
+# but stop being realtime without a GPU, which is a different app, not a setting.
+WHISPER_MODEL = "base.en"
 
 SAMPLE_RATE = 16000
 BYTES_PER_SEC = SAMPLE_RATE * 2  # int16 mono
@@ -148,7 +152,6 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--host", default=DEFAULT_HOST, help="Bind address (use 0.0.0.0 in containers)."
     )
-    parser.add_argument("--model", default="base.en", help="faster-whisper model size.")
     parser.add_argument(
         "--device",
         default="cpu",
@@ -172,7 +175,7 @@ def main() -> None:
     )
     args = _parse_args()
     _load_model(
-        args.model, args.device, args.compute_type
+        WHISPER_MODEL, args.device, args.compute_type
     )  # fail fast if the model is missing
 
     async def _on_startup(app: web.Application) -> None:

@@ -37,11 +37,12 @@ import logging
 
 from aiohttp import web
 
-from livepeer_gateway.errors import LivepeerHTTPError
+from livepeer_gateway.errors import LivepeerGatewayError
 from livepeer_gateway.live_runner import call_runner
 from livepeer_gateway.selection import runner_selector
 
 APP_ID = "vllm/qwen2.5-0.5b-instruct"
+REQUEST_TIMEOUT = 300.0  # a generation outruns the SDK's 5s default
 
 log = logging.getLogger("vllm-gateway")
 
@@ -69,7 +70,8 @@ def main() -> None:
     signer_url = args.signer.strip() or None
 
     async def _forward(request: web.Request) -> web.StreamResponse:
-        payload = await request.json()
+        # GET /v1/models carries no body; everything else posts JSON.
+        payload = await request.json() if request.can_read_body else {}
         runner_path = request.path  # e.g. /v1/chat/completions
         cursor = await runner_selector(  # Livepeer: 1
             discovery_url=args.discovery,  # omit if the signer does discovery itself
@@ -87,6 +89,8 @@ def main() -> None:
                 runner_url=runner_url,
                 payload=payload,
                 signer_url=signer_url,
+                method=request.method,
+                timeout=REQUEST_TIMEOUT,
                 stream=True,
             ) as stream:
                 resp = web.StreamResponse(
@@ -108,22 +112,26 @@ def main() -> None:
             runner_url=runner_url,
             payload=payload,
             signer_url=signer_url,
+            method=request.method,
+            timeout=REQUEST_TIMEOUT,
         )
         return web.json_response(result.data)
 
     async def _forward_or_error(request: web.Request) -> web.StreamResponse:
-        # A single-shot call holds a capacity slot for its duration, so a busy runner
-        # answers 503. Hand that back as JSON an OpenAI client can read.
+        # SDK errors as JSON, not aiohttp's HTML 500: upstream status if it has one
+        # (503 = busy runner), else 502.
         try:
             return await _forward(request)
-        except LivepeerHTTPError as exc:
+        except LivepeerGatewayError as exc:
             return web.json_response(
                 {"error": {"message": str(exc), "type": "livepeer_error"}},
-                status=exc.status_code,
+                status=getattr(exc, "status_code", 502),
             )
 
     app = web.Application()
-    app.router.add_post("/v1/{tail:.*}", _forward_or_error)  # forward every OpenAI path
+    # Every verb, not just POST: an OpenAI client lists models with GET /v1/models,
+    # itself a billable single-shot call (a production gateway would cache it).
+    app.router.add_route("*", "/v1/{tail:.*}", _forward_or_error)
     log.info(
         "gateway on http://%s:%d/v1 -> %s (signer=%s)",
         args.host,

@@ -3,8 +3,10 @@
 Realtime speech transcription on the Livepeer network. The client streams audio
 in over **Trickle** and receives the live transcript back over an
 orchestrator-proxied **WebSocket**, plus derived metrics (word count + a simple
-sentiment label) computed on the running text. Settings (e.g. language) can be
-adjusted live over the same WebSocket without restarting the stream.
+sentiment label) computed on the running text. The same WebSocket carries live
+`session.update` messages to the runner mid-stream — a settings-transport path
+(whether the backend acts on a given setting is up to the vLLM build; see the
+note under [Run offchain](#run-offchain-free)).
 
 |              |                                                        |
 | ------------ | ------------------------------------------------------ |
@@ -34,7 +36,9 @@ audio to it; the app subscribes (via the channel's runner-reachable
 (co-located in the same compose, never proxied), and streams transcript deltas +
 metrics to the client over `GET /ws` — a raw WebSocket the orchestrator proxies
 in both directions. The client can send `{"type": "session.update", "session":
-{...}}` on that socket at any time to adjust settings mid-stream. See
+{...}}` on that socket at any time; the runner forwards it to vLLM mid-stream.
+(Voxtral on vLLM 0.24 does not act on the `language` field — this exercises the
+settings-transport path, not a language switch.) See
 [runner.py](runner.py) and [transcriber.py](transcriber.py).
 
 ### Backends
@@ -52,7 +56,7 @@ GPU-free, using the mock backend — only the orchestrator and app start:
 
 ```sh
 docker compose up -d --build
-uv run client.py --discovery https://localhost:8935/discovery
+uv run client.py --discovery https://localhost:8935/discovery --insecure
 # [delta] +'hello'  words=1 sentiment=neu
 # ...
 # [done] 'hello and welcome to the livepeer realtime transcription demo ...'  words=... sentiment=pos
@@ -61,14 +65,23 @@ docker compose down
 
 The client synthesizes a few seconds of audio by default; pass a 16 kHz mono
 16-bit WAV with `--input path.wav` to stream a real file. Pass `--language en`
-to demonstrate a live `session.update` over the WebSocket after it connects.
+to demonstrate the live `session.update` **settings-transport** path: the client
+pushes it over the WebSocket after connecting and the runner forwards it to vLLM.
+It does **not** change the transcript — Voxtral on vLLM 0.24 ignores the
+`language` field, and the mock backend ignores all settings — so what this proves
+is that live settings reach the backend mid-stream, not that the language
+switched.
+
+`--insecure` skips TLS verification on the transcript WebSocket, which the local
+orchestrator serves with a self-signed cert. Verification is on by default; use
+`--insecure` only for local development, never against a public deployment.
 
 ### Real transcription (GPU box)
 
 ```sh
 TRANSCRIBER=vllm docker compose --profile vllm up -d --build
 docker compose logs -f vllm           # wait for /health to pass (model download)
-uv run client.py --input speech-16k.wav --discovery https://localhost:8935/discovery
+uv run client.py --input speech-16k.wav --discovery https://localhost:8935/discovery --insecure
 ```
 
 Validated on an RTX 4090 (24 GB): the compose file caps `--max-model-len` at
@@ -139,23 +152,34 @@ Numbers above: RTX 4090, Voxtral-Mini-4B-Realtime.
 
 ## Run on-chain (paid)
 
-Layer `docker-compose.onchain.yml` to add a remote signer and run the
-orchestrator on-chain, so the app advertises a price and the SDK pays per
-session. Needs an Ethereum RPC, a funded signer wallet (deposit + reserve), and
-an orchestrator wallet — see [On-chain (paid) setup](../README.md#on-chain-paid-setup).
+Layer `compose.onchain.yml` to add a remote signer and run the orchestrator
+on-chain, so the app advertises a price and the SDK pays per session. This
+example uses **metered pricing** (`PRICE` is USD per hour, billed per second for
+as long as the client holds the session — the natural fit for a stream with no
+fixed length). Needs an Ethereum RPC, a funded signer wallet (deposit +
+reserve), and an orchestrator wallet — see
+[On-chain (paid) setup](../README.md#on-chain-paid-setup).
 
 ```sh
 cp .env.example .env   # fill in RPC, network, keystore paths, accounts, pricing
-docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d --build
+docker compose -f compose.yml -f compose.onchain.yml up -d --build
 # confirm the price is advertised (price_per_unit != 0):
 curl -sk https://localhost:8935/discovery | jq
-uv run client.py --discovery https://localhost:8935/discovery --signer http://localhost:7936
-docker compose -f docker-compose.yml -f docker-compose.onchain.yml down
+uv run client.py --discovery https://localhost:8935/discovery --signer http://localhost:7936 --insecure
+docker compose -f compose.yml -f compose.onchain.yml down
 ```
 
 Add `--profile vllm` to the `up` command on a GPU box for real transcription.
 
 > [!NOTE]
-> Payment is settled once at session reservation via the SDK's 402 challenge.
-> For very long streams the orchestrator may expect ongoing per-segment payment;
-> see [FEEDBACK.md](FEEDBACK.md) (R4) for the open question and the fallback.
+> A metered session pays **more than once**. The upfront payment that answers the
+> 402 challenge only buys the signer's preroll; the orchestrator keeps debiting
+> every few seconds and drops the session on the first debit it cannot cover. So
+> `reserve_session` keeps the session funded in the background for as long as the
+> client holds it, and releasing the session (the `stop_runner_session` call in
+> the client's `finally`) stops that funding before the reservation is freed.
+> This needs an orchestrator with the session-scoped payment URL added after
+> `v0.9.0` ([go-livepeer #4008](https://github.com/livepeer/go-livepeer/pull/4008)),
+> which is why the compose files pin a master build. To watch it, stream a clip of
+> a few tens of seconds and follow `docker compose logs -f orchestrator` — you
+> should see repeated payments, not one.

@@ -99,6 +99,19 @@ was confusing, and the open questions a second builder would hit.
    reports **RTF 0.27 (~3.7x realtime)** and the figure is finally real. Worth
    noting that the two modes measure different things and both are useful: paced
    gives live latency (finalize tail 0.37 s), unpaced gives throughput headroom.
+10. **The SDK hardcodes unverified TLS, so an app cannot opt back into
+    verification for its own calls.** `livepeer_gateway/http.py` uses
+    `ssl._create_unverified_context()` and `aiohttp.TCPConnector(ssl=False)`
+    unconditionally, with the comment "Always ignore HTTPS certificate
+    validation (matches our gRPC behavior)." That is convenient against a
+    self-signed local orchestrator, but it means every SDK call
+    (`reserve_session`, `post_json`, `TricklePublisher`) skips certificate and
+    hostname checks even against a public deployment, and there is no parameter
+    or env var to turn it on. This app verifies TLS by default on the one
+    transport it owns directly (the transcript WebSocket) with an explicit
+    `--insecure` opt-out, but it cannot do the same for the SDK's own
+    connections. Verification should be the default with an explicit insecure
+    flag, mirroring what apps are expected to do.
 
 ## Suggestions
 

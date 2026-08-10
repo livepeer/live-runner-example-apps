@@ -72,12 +72,20 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--language", default="",
-        help="Transcription language code (e.g. 'en', 'fr'). Sent as a live "
-             "session.update after connecting — demonstrates mid-stream settings.",
+        help="Language hint sent as a live session.update after connecting. This "
+             "demonstrates the mid-stream settings-update transport, not a language "
+             "switch: Voxtral on vLLM 0.24 ignores the language field (and the mock "
+             "backend ignores all settings), so the value rides the path but does "
+             "not change the transcript.",
     )
     parser.add_argument(
         "--signer", default="",
         help="Remote signer base URL for the on-chain (paid) path.",
+    )
+    parser.add_argument(
+        "--insecure", action="store_true",
+        help="Skip TLS verification on the transcript WebSocket. Local dev only, "
+             "for an orchestrator with a self-signed cert; never in production.",
     )
     return parser.parse_args()
 
@@ -108,11 +116,22 @@ def _synthesize_pcm(seconds: float) -> bytes:
     return bytes(out)
 
 
-def _make_ssl_ctx() -> ssl.SSLContext:
-    """TLS context that skips verification — orchestrator uses a self-signed cert."""
+def _make_ssl_ctx(insecure: bool) -> ssl.SSLContext:
+    """TLS context for the transcript WebSocket.
+
+    Certificate and hostname verification are ON by default. Pass --insecure
+    only for local development against an orchestrator with a self-signed cert;
+    never against a public deployment.
+
+    Note: this governs the WebSocket this client opens directly. The Livepeer
+    gateway SDK currently hardcodes unverified TLS for its own HTTP/Trickle
+    calls (livepeer_gateway/http.py), so --insecure cannot be enforced across
+    the whole path from here — see FEEDBACK.md.
+    """
     ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+    if insecure:
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
     return ctx
 
 
@@ -288,9 +307,18 @@ async def main() -> None:
     pcm = _load_pcm(args.input) if args.input else _synthesize_pcm(args.seconds)
     log.info("audio: %.1f s (%d bytes)", len(pcm) / BYTES_PER_SECOND, len(pcm))
 
-    ssl_ctx = _make_ssl_ctx()
+    ssl_ctx = _make_ssl_ctx(args.insecure)
     session = None
     try:
+        # On the paid path, reserve_session answers the 402 challenge AND keeps
+        # the session funded: it starts a background task that sends continuing
+        # payments for as long as we hold the session, not just the one-shot
+        # reservation. We keep `session` for the whole stream and release it in
+        # the finally below (stop_runner_session stops funding, then frees the
+        # reservation), so a long transcription cannot lapse for non-payment.
+        # Continuing payments need an orchestrator with the session-scoped
+        # payment URL (go-livepeer #4008, in the sha-cc49228 image); on v0.9.0
+        # only the reservation payment is possible.
         session = await reserve_session(
             discovery_url=args.discovery,
             app=APP_ID,

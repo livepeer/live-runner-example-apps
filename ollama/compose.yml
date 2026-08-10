@@ -1,0 +1,80 @@
+# Offchain demo: orchestrator + one Ollama container serving several models, each
+# registered as its own Live Runner app by the registrar sidecar.
+#
+#   docker compose up -d --build
+#   uv run gateway.py &                             # OpenAI endpoint on :8080 (host)
+#   uv run client.py --model qwen2.5:0.5b --prompt "Hello!"
+#
+# Ollama itself has no Livepeer code: the registrar sits beside it and declares the
+# capabilities, which is what wrapping third-party software looks like. The gateway
+# and OpenAI client run on the host, like the vllm example.
+
+services:
+  orchestrator:
+    extends:
+      file: ../compose.orchestrator.yml
+      service: orchestrator
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: example_apps_ollama
+    environment:
+      # Concurrent generations the container will really run. The registrar splits
+      # this across the models it registers so the advertised total matches it.
+      - OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL:-2}
+      # Keep both models resident so a request never waits for a swap.
+      - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-1h}
+    volumes:
+      - ollama:/root/.ollama # persist pulled models across runs
+    # Ollama runs on CPU too; drop this block to try it without a GPU.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "ollama", "list"] # talks to the server; no curl in the image
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  # One-shot: pull the models, then exit. Which models to install is config; which
+  # models get advertised is discovered from Ollama by the registrar.
+  ollama-pull:
+    image: ollama/ollama:latest
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      # Must be in the container's env: the $$ below defers expansion to its shell.
+      - MODELS=${MODELS:-qwen2.5:0.5b llama3.2:1b}
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    # Single-element list: the whole script must reach `sh -c` as one argument.
+    # A scalar string here gets tokenized, so `sh -c` would see only `ollama`.
+    command:
+      - "for m in $${MODELS:-qwen2.5:0.5b llama3.2:1b}; do ollama pull $$m; done"
+    restart: "no"
+
+  registrar:
+    build: .
+    container_name: example_apps_ollama_registrar
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+      ollama-pull:
+        condition: service_completed_successfully
+    command:
+      - python
+      - registrar.py
+      - --orchestrator=https://orchestrator:8935
+      - --orchSecret=abcdef
+      - --ollama-url=http://ollama:11434
+      - --parallel=${OLLAMA_NUM_PARALLEL:-2}
+      - --prices=${PRICES:-}
+
+volumes:
+  ollama:

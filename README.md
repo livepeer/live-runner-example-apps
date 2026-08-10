@@ -90,7 +90,7 @@ The client side depends on the runner's mode:
 - **Single-shot** — **discover → call**: find the app via `runner_selector`, then one `call_runner`. The orchestrator reserves a session for the call and releases it when the response returns; on the paid path `call_runner` answers the 402 payment challenge inline. (`hello-world`, `tiles`, `api-proxy`, `vllm`, `ollama`)
 - **Persistent** — **discover → reserve → call → release**: reserve a session (`reserve_session`), call it — `call_runner`, streamed frames, or a WebSocket, depending on transport — then release it (`stop_runner_session`), which settles payment on-chain. (`echo`, `realtime-transcription`)
 
-Each example's `client.py` shows its exact calls — grep `# Livepeer:` to find them.
+Each example's `client.py` shows its exact calls, numbered in the order they happen — grep `# Livepeer:` to find them.
 
 ## Not covered here
 

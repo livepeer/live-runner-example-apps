@@ -37,19 +37,21 @@ Need a schema that isn't here? [Open an issue](https://github.com/livepeer/runne
 
 ## Examples
 
-| Example                                              | Goal                                                                                  | Registration | Mode        | Transport         | Pricing |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------ | ----------- | ----------------- | ------- |
-| [`hello-world`](./hello-world)                       | The simplest app: one request, one response                                           | dynamic      | single-shot | HTTP (JSON)       | fixed   |
-| [`tiles`](./tiles)                                   | Capacity fan-out — one call per tile                                                  | dynamic      | single-shot | HTTP (base64 PNG) | fixed   |
-| [`api-proxy`](./api-proxy)                           | Pass calls through to a hosted API — the operator holds the key, callers pay per call | static       | single-shot | HTTP (JPEG bytes) | fixed   |
-| [`echo`](./echo)                                     | Realtime video, transformed and echoed back                                           | dynamic      | persistent  | trickle           | hour    |
-| [`vllm`](./vllm)                                     | Drop-in OpenAI API; the client stays unmodified                                       | static       | single-shot | HTTP + SSE        | hour    |
-| [`realtime-transcription`](./realtime-transcription) | Audio up, transcripts back, on one socket                                             | dynamic      | persistent  | WebSocket         | hour    |
-| [`ollama`](./ollama)                                 | One container, several models, each its own priced app                                | dynamic      | single-shot | HTTP + SSE        | hour    |
+| Example                                              | Goal                                                                                  | Registration | Mode        | Transport         | Pricing | Capabilities |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------ | ----------- | ----------------- | ------- | ------------ |
+| [`hello-world`](./hello-world)                       | The simplest app: one request, one response                                           | dynamic      | single-shot | HTTP (JSON)       | fixed   | 1            |
+| [`tiles`](./tiles)                                   | Capacity fan-out — one call per tile                                                  | dynamic      | single-shot | HTTP (base64 PNG) | fixed   | 1            |
+| [`api-proxy`](./api-proxy)                           | Pass calls through to a hosted API — the operator holds the key, callers pay per call | static       | single-shot | HTTP (JPEG bytes) | fixed   | 1            |
+| [`echo`](./echo)                                     | Realtime video, transformed and echoed back                                           | dynamic      | persistent  | trickle           | hour    | 1            |
+| [`vllm`](./vllm)                                     | Drop-in OpenAI API; the client stays unmodified                                       | static       | single-shot | HTTP + SSE        | hour    | 1            |
+| [`realtime-transcription`](./realtime-transcription) | Audio up, transcripts back, on one socket                                             | dynamic      | persistent  | WebSocket         | hour    | 1            |
+| [`ollama`](./ollama)                                 | One container, several models, each its own priced app                                | dynamic      | single-shot | HTTP + SSE        | hour    | N            |
 
-Start with `hello-world` (the smallest end-to-end path); the others each layer on one new idea. More will follow, including a full example that exercises every feature. Each is self-contained and runs **offchain** (free, no wallet); most also run **on-chain** (paid) — see each README.
+Start with `hello-world` (the smallest end-to-end path); the others each layer on one new idea. Each is self-contained and runs **offchain** (free, no wallet); most also run **on-chain** (paid) — see each README.
 
-This set stays **minimal and curated**: it covers each value of the axes above (registration, mode, transport, pricing), not one example per app. New examples land here only when they fill a gap in that table — apps built on the runner belong in their own repos, listed under [External examples](#external-examples).
+**Capabilities** is how many apps one process registers. It is `1` everywhere except `ollama`, which registers one per model from a single container — several priced capabilities behind one deployment.
+
+This set stays **minimal and curated**: it covers each value of the axes above (registration, mode, transport, pricing, capabilities), not one example per app. New examples land here only when they fill a gap in that table — apps built on the runner belong in their own repos, listed under [External examples](#external-examples).
 
 ## Registration
 
@@ -89,6 +91,16 @@ The client side depends on the runner's mode:
 - **Persistent** — **discover → reserve → call → release**: reserve a session (`reserve_session`), call it — `call_runner`, streamed frames, or a WebSocket, depending on transport — then release it (`stop_runner_session`), which settles payment on-chain. (`echo`, `realtime-transcription`)
 
 Each example's `client.py` shows its exact calls — grep `# Livepeer:` to find them.
+
+## Not covered here
+
+The runner does a few more things that no example demonstrates, listed so their absence reads as a choice rather than a limit:
+
+- **Proxy mode.** Registering with `proxy: true` makes the orchestrator hand out an opaque per-session URL from a configurable template instead of the default `/apps/{runner}/session/{session}/app` path, and the template's placeholder may sit in the **host**. That gives each session its own origin, which matters for browser apps (cookies, CORS, service workers are per-origin) and for anything serving assets from absolute paths. There is no example because the app-side change is one boolean — everything interesting is orchestrator configuration.
+- **`label` and `version`** on registration. Both are carried through to discovery and neither changes behaviour, so they are yours to use for operational bookkeeping.
+- **Changing `status` while running.** A runner can heartbeat itself out of `ready` to stop receiving sessions, and back again. Useful when one process registers several apps that share hardware, but the SDK has no public setter for it yet.
+
+Two known gaps in the runner itself are worth reading before you deploy: capacity is tracked per registration rather than per machine ([go-livepeer#4015](https://github.com/livepeer/go-livepeer/issues/4015)), and a persistent session whose client disappears is never released offchain ([go-livepeer#4016](https://github.com/livepeer/go-livepeer/issues/4016)).
 
 ## External examples
 

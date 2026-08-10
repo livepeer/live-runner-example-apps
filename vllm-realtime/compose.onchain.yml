@@ -1,5 +1,5 @@
 # On-chain payment overlay for vllm-realtime. Layer it on the offchain base:
-#   docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d --build
+#   docker compose -f compose.yml -f compose.onchain.yml up -d --build
 #   # add --profile vllm on a GPU box for real transcription
 #
 # Adds the shared remote signer, re-points the orchestrator on-chain (see

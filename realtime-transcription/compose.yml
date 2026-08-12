@@ -1,0 +1,34 @@
+# End-to-end offchain demo: orchestrator + realtime-transcription app (WebSocket
+# speech-to-text).
+#
+# The orchestrator service is defined once in ../compose.orchestrator.yml and
+# pulled in with `extends`; this file only adds the app. Needs an NVIDIA GPU: the
+# pinned model only keeps pace on one. Once up, stream a WAV from the host:
+#   docker compose up -d --build
+#   uv run client.py --discovery https://localhost:8935/discovery sample.wav
+
+services:
+  orchestrator:
+    extends:
+      file: ../compose.orchestrator.yml
+      service: orchestrator
+
+  app:
+    build: .
+    container_name: example_apps_realtime_transcription
+    # Wait for the orchestrator's healthcheck so registration doesn't race its boot.
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    command:
+      - --host=0.0.0.0
+      - --orchestrator=https://orchestrator:8935
+      - --orchSecret=abcdef
+      - --runner-url=http://app:8989
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

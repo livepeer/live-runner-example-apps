@@ -11,4 +11,4 @@ dependencies = [
 
 # livepeer-gateway is not on PyPI yet; pull it from the branch.
 [tool.uv.sources]
-livepeer-gateway = { git = "https://github.com/livepeer/livepeer-python-gateway", branch = "ja/live-runner" }
+livepeer-gateway = { git = "https://github.com/livepeer/livepeer-python-gateway", branch = "main" }

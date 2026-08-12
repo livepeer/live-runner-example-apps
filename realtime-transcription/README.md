@@ -9,9 +9,9 @@ Realtime speech-to-text on the Livepeer network over a **WebSocket** — the cli
 | Registration | dynamic (self-registers via the SDK)      |
 | Model        | `large-v3-turbo` (faster-whisper, fixed)  |
 | Transport    | WebSocket (`/transcribe`)                 |
-| Port         | 5005                                      |
+| Port         | 8989                                      |
 
-**Requires an NVIDIA GPU.** The model is fixed at `large-v3-turbo`: it swaps large-v3's 32-layer decoder for 4, so it runs far below realtime on a 3090 while staying near large-v3 quality. On CPU it loads but falls behind a live stream, which is the one thing this example is about. Prerequisites (Docker, `uv`, the not-yet-released SDK) and the shared on-chain/payment setup are in the [repo README](../README.md).
+**Requires an NVIDIA GPU.** The model is fixed at `large-v3-turbo`: it swaps large-v3's 32-layer decoder for 4, so it runs far below realtime on a 3090 while staying near large-v3 quality. The device is pinned with it (`cuda`/`float16`) rather than exposed as a flag: on CPU the model loads but falls behind a live stream, which is the one thing this example is about. Prerequisites (Docker, `uv`, the not-yet-released SDK) and the shared on-chain/payment setup are in the [repo README](../README.md).
 
 ## How it's wired
 
@@ -27,25 +27,43 @@ Wire protocol on `/transcribe`:
 
 - client → server: binary frames of **16 kHz mono PCM (int16)**
 - client → server: text `eos` to finish
-- server → client: JSON `{"text": "...", "final": false|true}`
+- server → client: JSON `{"text": "...", "final": false|true, "start": <sec>, "end": <sec>}`
+
+Cumulative, not incremental: each partial carries the whole utterance so far and may revise earlier words, so a client replaces rather than appends. That matches Deepgram and Vosk, and it is the honest shape for a decoder that re-runs over the buffer. Delta protocols (OpenAI's `transcript.text.delta`) only become correct once decoding is append-only, which is what the LocalAgreement approach below buys you.
 
 ## Audio
 
-Input must be **16 kHz mono WAV**. Convert any file you have, or record a few seconds of yourself talking:
+Input must be **16 kHz mono WAV**. Fetch 21s of NASA podcast speech, public domain under 17 U.S.C. 105:
+
+```sh
+curl -sL https://images-assets.nasa.gov/audio/Ep401_Artemis_II_Launch/Ep401_Artemis_II_Launch~128k.mp3 \
+  | ffmpeg -ss 900 -t 21 -i pipe:0 -ar 16000 -ac 1 sample.wav
+```
+
+Or bring your own, replacing `input.mp3` / picking your capture device:
 
 ```sh
 ffmpeg -i input.mp3 -ar 16000 -ac 1 sample.wav                 # convert
 ffmpeg -f alsa -i default -ar 16000 -ac 1 -t 20 sample.wav     # record (macOS: -f avfoundation -i :0)
 ```
 
-Use a clip with a couple of sentences and a pause between them: the app finalizes on trailing silence, so that is what shows partials turning into finals more than once.
+Use a clip with a couple of sentences and a pause between them: the app finalizes on trailing silence, so that is what shows partials turning into finals more than once. The NASA clip is trimmed to three such sentences.
+
+Or skip the file and talk into a microphone: pass `-` and pipe raw PCM in, which streams until you Ctrl-C.
+
+```sh
+ffmpeg -f alsa -i default -ar 16000 -ac 1 -f s16le - \
+  | uv run client.py --discovery https://localhost:8935/discovery -
+```
+
+(macOS: `-f avfoundation -i :0`. If `default` fails, name the device: `arecord -l` then `-i plughw:1,0`.)
 
 ## Run offchain (free)
 
 ```sh
 docker compose up -d --build      # first run downloads the whisper model
 curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # confirm livepeer-example/realtime-transcription registered
-uv run client.py --discovery https://localhost:8935/discovery --file sample.wav
+uv run client.py --discovery https://localhost:8935/discovery sample.wav
 docker compose down
 ```
 
@@ -59,7 +77,7 @@ Layer `compose.onchain.yml` to add a remote signer and run the orchestrator on-c
 cp .env.example .env   # fill in RPC, network, keystore paths, accounts, pricing
 docker compose -f compose.yml -f compose.onchain.yml up -d --build
 uv run client.py --discovery https://localhost:8935/discovery \
-  --signer http://localhost:7936 --file sample.wav
+  --signer http://localhost:7936 sample.wav
 docker compose -f compose.yml -f compose.onchain.yml down
 ```
 
@@ -72,5 +90,5 @@ Start an orchestrator built from go-livepeer `v0.9.0` or newer (see [Build from 
 ```sh
 ./livepeer -orchestrator -useLiveRunners -serviceAddr localhost:8935 -orchSecret abcdef -v 6
 uv run runner.py --orchestrator https://localhost:8935 --orchSecret abcdef
-uv run client.py --file sample.wav
+uv run client.py sample.wav
 ```

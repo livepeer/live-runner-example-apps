@@ -10,17 +10,21 @@ Livepeer integration (grep `# Livepeer:`):
   2. ws_connect()           — open the proxied WebSocket to the session URL
   3. stop_runner_session()  — end the session (settles payment on-chain)
 
-Audio must be 16 kHz mono. Convert anything with ffmpeg:
+Audio must be 16 kHz mono. Convert a file, or stream a mic through stdin:
   ffmpeg -i input.mp3 -ar 16000 -ac 1 sample.wav
+  ffmpeg -f alsa -i default -ar 16000 -ac 1 -f s16le - | uv run client.py -
 """
+
 from __future__ import annotations
 
 import argparse
 import asyncio
 import logging
 import ssl
+import sys
 import wave
 from contextlib import suppress
+from pathlib import Path
 
 import aiohttp
 
@@ -40,8 +44,14 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Stream audio to a Whisper Live Runner over WebSocket."
     )
+    parser.add_argument(
+        "input",
+        help=(
+            "16 kHz mono WAV to stream, or - to read raw PCM from stdin "
+            "(e.g. a mic piped from ffmpeg)"
+        ),
+    )
     parser.add_argument("--discovery", default=DEFAULT_DISCOVERY)
-    parser.add_argument("--file", required=True, help="16 kHz mono WAV to stream.")
     parser.add_argument(
         "--signer", default="", help="Remote signer base URL (on-chain/paid path)."
     )
@@ -49,6 +59,8 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _read_pcm(path: str) -> bytes:
+    # The socket carries bare samples with no format header, so the file has to
+    # already match what the runner expects; readframes() drops the WAV header.
     with wave.open(path, "rb") as w:
         if (
             w.getframerate() != SAMPLE_RATE
@@ -62,11 +74,20 @@ def _read_pcm(path: str) -> bytes:
         return w.readframes(w.getnframes())
 
 
-async def _send(ws: aiohttp.ClientWebSocketResponse, pcm: bytes) -> None:
+async def _send(
+    ws: aiohttp.ClientWebSocketResponse, pcm: bytes, *, live: bool = False
+) -> None:
     step = SAMPLE_RATE * 2 * CHUNK_MS // 1000  # bytes per chunk
-    for i in range(0, len(pcm), step):
-        await ws.send_bytes(pcm[i : i + step])
-        await asyncio.sleep(CHUNK_MS / 1000)  # pace at real time
+    if live:
+        # A mic arrives at real time already, so read blocking (off the event
+        # loop) and forward as it comes; the pipe closing ends the stream.
+        loop = asyncio.get_running_loop()
+        while chunk := await loop.run_in_executor(None, sys.stdin.buffer.read, step):
+            await ws.send_bytes(chunk)
+    else:
+        for i in range(0, len(pcm), step):
+            await ws.send_bytes(pcm[i : i + step])
+            await asyncio.sleep(CHUNK_MS / 1000)  # pace at real time
     await ws.send_str("eos")
 
 
@@ -78,7 +99,8 @@ async def _recv(ws: aiohttp.ClientWebSocketResponse) -> None:
             break
         data = msg.json()
         marker = "FINAL" if data.get("final") else "partial"
-        print(f"[{marker}] {data.get('text', '')}")
+        span = f"{data.get('start', 0):6.2f}-{data.get('end', 0):6.2f}s"
+        print(f"[{span}] [{marker}] {data.get('text', '')}")
 
 
 async def main() -> None:
@@ -86,14 +108,21 @@ async def main() -> None:
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
     args = _parse_args()
-    pcm = _read_pcm(args.file)
-    signer_url = args.signer.strip() or None
+    input_source = args.input.strip()
+    live = input_source == "-"
+    if not live:
+        input_path = Path(input_source).expanduser()
+        if not input_path.exists():
+            raise SystemExit(f"input file does not exist: {input_path}")
+        input_source = str(input_path)
+    # Read (and validate) the file before reserving a paid session.
+    pcm = b"" if live else _read_pcm(input_source)
     session = None
     try:
         session = await reserve_session(  # Livepeer: 1
             discovery_url=args.discovery,  # omit if the signer does discovery itself
             app=APP_ID,
-            signer_url=signer_url,
+            signer_url=args.signer.strip() or None,
         )
         log.info("session_id=%s app_url=%s", session.session_id, session.app_url)
         ws_url = (
@@ -102,14 +131,21 @@ async def main() -> None:
             .rstrip("/")
             + "/transcribe"
         )
-        ctx = ssl.create_default_context()  # orchestrator serves a self-signed cert
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        async with aiohttp.ClientSession() as cs:
-            async with cs.ws_connect(
-                ws_url, ssl=ctx, heartbeat=20
-            ) as ws:  # Livepeer: 2
-                await asyncio.gather(_send(ws, pcm), _recv(ws))
+        # Verification comes off: the orchestrator serves a self-signed cert.
+        ctx: ssl.SSLContext | None = None
+        if ws_url.startswith("wss://"):
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+
+        # The session funds itself while it is held; leaving this block stops that.
+        # Here that block is the socket's lifetime, which is what gets metered.
+        async with session:
+            async with aiohttp.ClientSession() as cs:
+                async with cs.ws_connect(
+                    ws_url, ssl=ctx or True, heartbeat=20
+                ) as ws:  # Livepeer: 2
+                    await asyncio.gather(_send(ws, pcm, live=live), _recv(ws))
     except LivepeerGatewayError as exc:
         raise SystemExit(f"ERROR: {exc}") from exc
     finally:

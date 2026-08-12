@@ -1,12 +1,11 @@
-# Offchain demo: orchestrator + a streaming-ASR app that self-registers
-# (dynamic) and serves speech-to-text over a WebSocket.
+# End-to-end offchain demo: orchestrator + realtime-transcription app (WebSocket
+# speech-to-text).
 #
+# The orchestrator service is defined once in ../compose.orchestrator.yml and
+# pulled in with `extends`; this file only adds the app. Needs an NVIDIA GPU: the
+# pinned model only keeps pace on one. Once up, stream a WAV from the host:
 #   docker compose up -d --build
-#   uv run client.py --discovery https://localhost:8935/discovery --file sample.wav
-#
-# The orchestrator is defined once in ../compose.orchestrator.yml and pulled in
-# with `extends`. The app embeds the SDK and registers itself, like hello-world.
-# Requires an NVIDIA GPU: the pinned model only keeps pace on one.
+#   uv run client.py --discovery https://localhost:8935/discovery sample.wav
 
 services:
   orchestrator:
@@ -22,15 +21,10 @@ services:
       orchestrator:
         condition: service_healthy
     command:
-      - python
-      - runner.py
       - --host=0.0.0.0
       - --orchestrator=https://orchestrator:8935
       - --orchSecret=abcdef
-      - --runner-url=http://app:5005
-      - --device=${WHISPER_DEVICE:-cuda}
-      - --compute-type=${WHISPER_COMPUTE:-float16}
-    # large-v3-turbo needs the GPU to stay ahead of a live stream.
+      - --runner-url=http://app:8989
     deploy:
       resources:
         reservations:

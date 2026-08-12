@@ -5,7 +5,7 @@ Example **apps that run on** the Livepeer **live runner** — [go-livepeer](http
 The point is to **swap the compute without changing your app — permissionlessly, no lock-in**. Your app stays a plain service with little or no Livepeer-specific code, so you're never tied to us. And the network is permissionless: anyone can run or extend it, no one gatekeeps what you deploy, and no single party can take your app down. Write the app once; **move the compute freely**.
 
 > [!NOTE]
-> Live runners ship in mainline go-livepeer since [v0.9.0](https://github.com/livepeer/go-livepeer/releases/tag/v0.9.0). The Python SDK still comes from the [`ja/live-runner`](https://github.com/livepeer/livepeer-python-gateway/tree/ja/live-runner) branch until it is published to PyPI.
+> Live runners ship in mainline go-livepeer since [v0.9.0](https://github.com/livepeer/go-livepeer/releases/tag/v0.9.0). The Python SDK is installed from its `main` branch until it is published to PyPI.
 
 ## How it works
 
@@ -112,10 +112,10 @@ Each example is self-contained and its README has the run commands. Everything b
 
 - **Docker** for the end-to-end demos, so there is nothing to build. They currently run a mainline `livepeer/go-livepeer` master build rather than a release image: metered pricing needs the session-scoped payment URL added after v0.9.0 ([#4008](https://github.com/livepeer/go-livepeer/pull/4008)). They move back to a release tag once one carries it.
 - **Python 3.12+** and [`uv`](https://docs.astral.sh/uv/) for the client.
-- The **`livepeer-gateway` SDK** from the `ja/live-runner` branch (not yet on PyPI):
+- The **`livepeer-gateway` SDK** from its `main` branch (not yet on PyPI):
 
   ```sh
-  pip install "git+https://github.com/livepeer/livepeer-python-gateway@ja/live-runner"
+  pip install "git+https://github.com/livepeer/livepeer-python-gateway@main"
   ```
 
 ### Shared components

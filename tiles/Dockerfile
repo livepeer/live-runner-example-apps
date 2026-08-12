@@ -11,7 +11,7 @@ RUN apt-get update \
 # livepeer-gateway SDK isn't on PyPI yet; install from Git.
 # opencv-python-headless needs no system GUI libs.
 RUN pip install --no-cache-dir \
-    "livepeer-gateway @ git+https://github.com/livepeer/livepeer-python-gateway@ja/live-runner" \
+    "livepeer-gateway @ git+https://github.com/livepeer/livepeer-python-gateway@main" \
     opencv-python-headless numpy aiohttp
 
 WORKDIR /app

@@ -14,7 +14,7 @@ RUN apt-get update \
 RUN pip install --no-cache-dir \
     faster-whisper numpy \
     nvidia-cublas-cu12 nvidia-cudnn-cu12 \
-    "livepeer-gateway @ git+https://github.com/livepeer/livepeer-python-gateway@ja/live-runner"
+    "livepeer-gateway @ git+https://github.com/livepeer/livepeer-python-gateway@main"
 
 ENV LD_LIBRARY_PATH=/usr/local/lib/python3.12/site-packages/nvidia/cublas/lib:/usr/local/lib/python3.12/site-packages/nvidia/cudnn/lib
 

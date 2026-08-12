@@ -32,7 +32,12 @@ import av
 from livepeer_gateway.errors import LivepeerGatewayError
 from livepeer_gateway.live_runner import stop_runner_session
 from livepeer_gateway.media_output import MediaOutput
-from livepeer_gateway.media_publish import MediaPublish
+from livepeer_gateway.media_publish import (
+    AudioOutputConfig,
+    MediaPublish,
+    MediaPublishConfig,
+    VideoOutputConfig,
+)
 from livepeer_gateway.http import post_json
 from livepeer_gateway.selection import reserve_session
 
@@ -40,7 +45,7 @@ DEFAULT_DISCOVERY = "https://localhost:8935/discovery"
 APP_ID = "livepeer-example/echo"
 DEFAULT_OUTPUT = "echo-out.ts"
 MAX_BLUR_RADIUS = 100
-MODES = ("echo", "gray", "invert", "blur")
+MODES = ("echo", "gray", "invert", "blur", "robot")
 
 log = logging.getLogger("echo-client")
 
@@ -79,7 +84,8 @@ def _parse_args() -> argparse.Namespace:
         choices=MODES,
         default="echo",
         help=(
-            "Transform the runner applies: echo (passthrough), gray, invert, or blur. "
+            "Transform the runner applies: echo (passthrough), gray, invert, blur, "
+            "or robot (ring-modulates the audio). "
             "blur sweeps the radius; the rest are static."
         ),
     )
@@ -117,7 +123,20 @@ async def _publish_video(
             raise LivepeerGatewayError(
                 f"No video stream found in input: {input_source}"
             )
-        publisher = MediaPublish(publish_url)  # Livepeer: 2 (publish frames)
+        # Only robot touches audio, so only robot publishes an audio track: the
+        # container waits for a first frame on every track it declares.
+        send_audio = mode == "robot"
+        if send_audio and not input_.streams.audio:
+            raise LivepeerGatewayError(
+                f"robot needs audio, but the input has none: {input_source}"
+            )
+        tracks: list[VideoOutputConfig | AudioOutputConfig] = [VideoOutputConfig()]
+        if send_audio:
+            # Pinned: opus rejects 44.1 kHz, so let MediaPublish resample to 48.
+            tracks.append(AudioOutputConfig(sample_rate=48000))
+        publisher = MediaPublish(  # Livepeer: 2 (publish frames)
+            publish_url, config=MediaPublishConfig(tracks=tracks)
+        )
         prev_pts_time: float | None = None
         prev_wall: float | None = None
         next_update_pts_time: float | None = None
@@ -126,9 +145,18 @@ async def _publish_video(
         # blur sweeps 0->max->0 (2*MAX steps); spread one full cycle over blur_period.
         update_interval = blur_period / (2 * MAX_BLUR_RADIUS)
 
+        video_index = 0
         try:
-            for index, frame in enumerate(input_.decode(video=0), start=1):
-                if max_frames > 0 and index > max_frames:
+            # decode() yields both streams interleaved; without audio, stay on the
+            # video stream alone. Pacing and the blur sweep run off video frames only.
+            frames = input_.decode() if send_audio else input_.decode(video=0)
+            for frame in frames:
+                if not isinstance(frame, av.VideoFrame):
+                    await publisher.write_frame(frame)
+                    continue
+
+                video_index += 1
+                if max_frames > 0 and video_index > max_frames:
                     break
                 current_pts_time = None
                 if frame.pts is not None and frame.time_base is not None:
@@ -209,7 +237,13 @@ async def main() -> None:
         async with session:
             echo = await post_json(
                 f"{session.app_url.rstrip('/')}/echo",
-                {"radius": args.radius, "mode": args.mode},
+                # robot is the mode that transforms audio, so it is also the one
+                # that asks the runner for an audio track.
+                {
+                    "radius": args.radius,
+                    "mode": args.mode,
+                    "audio": args.mode == "robot",
+                },
             )
             in_url = _channel_url(echo, "in")
             out_url = _channel_url(echo, "out")

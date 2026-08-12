@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "av",               # client + runner: decode/encode video frames
     "opencv-python-headless",  # runner: gray/invert/blur transforms
+    "numpy",            # runner: robot ring modulation
     "aiohttp",
     "livepeer-gateway",
 ]

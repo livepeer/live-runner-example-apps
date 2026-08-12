@@ -23,10 +23,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-from contextlib import suppress
+from contextlib import asynccontextmanager, suppress
 
 import numpy as np
-from aiohttp import web
+import uvicorn
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 from livepeer_gateway.live_runner import register_runner
 
@@ -94,9 +95,8 @@ def _transcribe(pcm: bytes) -> str:
 log = logging.getLogger("realtime-transcription")
 
 
-async def _handle_transcribe(request: web.Request) -> web.WebSocketResponse:
-    ws = web.WebSocketResponse(heartbeat=20)
-    await ws.prepare(request)
+async def _transcribe_socket(ws: WebSocket) -> None:
+    await ws.accept()
     log.info("transcription socket opened")
 
     seg = bytearray()  # current utterance PCM; the worker trims finalized audio
@@ -139,12 +139,17 @@ async def _handle_transcribe(request: web.Request) -> web.WebSocketResponse:
 
     worker = asyncio.create_task(_worker())
     try:
-        async for msg in ws:
-            if msg.type == web.WSMsgType.BINARY:
-                seg.extend(msg.data)
-                if _rms(msg.data) >= SILENCE_RMS:
+        while True:
+            message = await ws.receive()
+            if message["type"] == "websocket.disconnect":
+                break
+            if (data := message.get("bytes")) is not None:
+                seg.extend(data)
+                if _rms(data) >= SILENCE_RMS:
                     spoke = True
-            elif msg.type == web.WSMsgType.TEXT and msg.data.strip() == "eos":
+            elif (text_in := message.get("text")) is not None:
+                if text_in.strip() != "eos":
+                    continue
                 # Stop the worker first, or a partial it is mid-way through can
                 # land after the closing final and read as the last transcript.
                 worker.cancel()
@@ -154,15 +159,15 @@ async def _handle_transcribe(request: web.Request) -> web.WebSocketResponse:
                 if text:
                     await ws.send_json(_message(text, len(seg), final=True))
                 break
-            elif msg.type == web.WSMsgType.ERROR:
-                log.warning("ws error: %s", ws.exception())
-                break
+    except WebSocketDisconnect:
+        pass
     finally:
         worker.cancel()
         with suppress(asyncio.CancelledError, Exception):
             await worker
+        with suppress(Exception):
+            await ws.close()
     log.info("transcription socket closed")
-    return ws
 
 
 def _parse_args() -> argparse.Namespace:
@@ -184,15 +189,10 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
-    )
-    args = _parse_args()
-    _load_model()  # fail fast if the model or the GPU is missing
-
-    async def _on_startup(app: web.Application) -> None:
-        app["registration"] = await register_runner(  # Livepeer: 1
+def build_app(args: argparse.Namespace) -> FastAPI:
+    @asynccontextmanager
+    async def _lifespan(app: FastAPI):
+        app.state.registration = await register_runner(  # Livepeer: 1
             args.orchestrator,
             secret=args.orchSecret,
             runner_url=args.runner_url,
@@ -201,18 +201,28 @@ def main() -> None:
             price=args.price,  # decimal USD/hour
         )
         log.info(
-            "registered runner_id=%s app=%s", app["registration"].runner_id, APP_ID
+            "registered runner_id=%s app=%s", app.state.registration.runner_id, APP_ID
         )
-
-    async def _on_cleanup(app: web.Application) -> None:
+        yield
         with suppress(Exception):
-            await app["registration"].close()  # Livepeer: 2
+            await app.state.registration.close()  # Livepeer: 2
 
-    app = web.Application()
-    app.router.add_get("/transcribe", _handle_transcribe)
-    app.on_startup.append(_on_startup)
-    app.on_cleanup.append(_on_cleanup)
-    web.run_app(app, host=args.host, port=DEFAULT_PORT)
+    app = FastAPI(title=APP_ID, version="0.1.0", lifespan=_lifespan)
+
+    @app.websocket("/transcribe")
+    async def transcribe(websocket: WebSocket) -> None:
+        await _transcribe_socket(websocket)
+
+    return app
+
+
+def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+    )
+    args = _parse_args()
+    _load_model()  # fail fast if the model or the GPU is missing
+    uvicorn.run(build_app(args), host=args.host, port=DEFAULT_PORT, access_log=False)
 
 
 if __name__ == "__main__":

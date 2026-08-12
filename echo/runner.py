@@ -18,15 +18,16 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import logging
-from contextlib import suppress
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 import av
 import numpy as np
-from aiohttp import web
+import uvicorn
+from fastapi import FastAPI, HTTPException, Request
+from pydantic import BaseModel, Field
 
 from livepeer_gateway.live_runner import register_runner
 from livepeer_gateway.media_decode import AudioDecodedMediaFrame, VideoDecodedMediaFrame
@@ -42,7 +43,6 @@ log = logging.getLogger("echo")
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8989
-MODES = frozenset({"echo", "gray", "invert", "blur", "robot"})
 # "robot" multiplies each sample by a sine at this frequency; the sample count is
 # unchanged, so audio stays in sync with video.
 ROBOT_HZ = 220.0
@@ -104,23 +104,35 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _session_id(request: web.Request) -> str:
+def _session_id(request: Request) -> str:
     session_id = request.headers.get("Livepeer-Session-Id", "").strip()
     if not session_id:
-        raise web.HTTPBadRequest(text="missing Livepeer-Session-Id header")
+        raise HTTPException(
+            status_code=400, detail="missing Livepeer-Session-Id header"
+        )
     return session_id
 
 
-def _parse_mode(payload: dict[str, Any]) -> ModeState:
-    mode = str(payload.get("mode", "echo")).strip().lower()
-    if mode not in MODES:
-        raise web.HTTPBadRequest(text=f"mode must be one of {sorted(MODES)}")
-    radius = payload.get("radius", 7)
-    try:
-        radius_int = int(radius)
-    except (TypeError, ValueError) as exc:
-        raise web.HTTPBadRequest(text="radius must be an integer") from exc
-    return ModeState(mode=mode, radius=max(1, min(99, radius_int)))
+class EchoRequest(BaseModel):
+    mode: Literal["echo", "gray", "invert", "blur", "robot"] = "echo"
+    # The client sweeps 0..100; clamped rather than rejected, as before.
+    radius: int = Field(7, description="Blur strength; blur mode only.")
+    audio: bool = Field(False, description="Publish an audio track (robot needs one).")
+
+
+class UpdateRequest(BaseModel):
+    mode: Literal["echo", "gray", "invert", "blur", "robot"] = "echo"
+    radius: int = 7
+
+
+class SessionResponse(BaseModel):
+    session: str
+    in_: str = Field(..., alias="in")
+    out: str
+    mode: str
+    radius: int | None = None
+
+    model_config = {"populate_by_name": True}
 
 
 def _odd_kernel(radius: int) -> int:
@@ -181,83 +193,101 @@ def _transform_frame(
     return out
 
 
-async def _handle_echo(request: web.Request) -> web.Response:
-    global state
-    session_id = _session_id(request)
+def build_app(args: argparse.Namespace) -> FastAPI:
+    @asynccontextmanager
+    async def _lifespan(app: FastAPI):
+        app.state.registration = await register_runner(  # Livepeer: 1
+            args.orchestrator,
+            secret=args.orchSecret,
+            runner_url=args.runner_url,
+            app="livepeer-example/echo",
+            mode="persistent",
+            price=args.price,
+        )
+        log.info(
+            "registered runner_id=%s orchestrator=%s",
+            app.state.registration.runner_id,
+            app.state.registration.orchestrator_url,
+        )
+        yield
+        await _close_pipeline()
+        with suppress(Exception):
+            await app.state.registration.close()  # Livepeer: 3
 
-    if state is not None:
-        if state.session_id != session_id:
-            raise web.HTTPConflict(text="echo runner already has an active session")
-        return web.json_response(state.to_json())
+    app = FastAPI(title="livepeer-example/echo", version="0.1.0", lifespan=_lifespan)
 
-    # Pass the request so the SDK opens channels using the orchestrator's
-    # Session-Control header, whose URLs are reachable from the runner's network.
-    channels = await request.app["registration"].create_trickle_channels(  # Livepeer: 2
-        request,
-        [
-            {"name": "in", "mime_type": "video/mp2t"},
-            {"name": "out", "mime_type": "video/mp2t"},
-        ],
-    )
-    by_name = {channel["name"]: channel for channel in channels}
-    if "in" not in by_name or "out" not in by_name:
-        raise web.HTTPInternalServerError(
-            text="orchestrator did not return in/out channels"
+    @app.post("/echo", response_model=SessionResponse, response_model_by_alias=True)
+    async def echo(body: EchoRequest, request: Request) -> dict[str, Any]:
+        global state
+        session_id = _session_id(request)
+
+        if state is not None:
+            if state.session_id != session_id:
+                raise HTTPException(409, "echo runner already has an active session")
+            return state.to_json()
+
+        # Pass the request so the SDK opens channels using the orchestrator's
+        # Session-Control header, whose URLs are reachable from the runner's network.
+        channels = (
+            await request.app.state.registration.create_trickle_channels(  # Livepeer: 2
+                request,
+                [
+                    {"name": "in", "mime_type": "video/mp2t"},
+                    {"name": "out", "mime_type": "video/mp2t"},
+                ],
+            )
+        )
+        by_name = {channel["name"]: channel for channel in channels}
+        if "in" not in by_name or "out" not in by_name:
+            raise HTTPException(500, "orchestrator did not return in/out channels")
+
+        mode = ModeState(mode=body.mode, radius=max(1, min(99, body.radius)))
+        # Tracks are declared upfront and the container waits for a first frame on
+        # each, so only declare audio when the client says it is sending some.
+        tracks: list[VideoOutputConfig | AudioOutputConfig] = [VideoOutputConfig()]
+        if body.audio:
+            tracks.append(AudioOutputConfig())
+        # internal_url: runner-reachable address (same as public url on a shared net).
+        publisher = MediaPublish(
+            by_name["out"].get("internal_url", by_name["out"]["url"]),
+            config=MediaPublishConfig(tracks=tracks),
         )
 
-    # for production apps, handle errors
-    payload = json.loads(await request.read())
-    mode = _parse_mode(payload)
-    # Tracks are declared upfront and the container waits for a first frame on each,
-    # so only declare audio when the client says it is sending some.
-    tracks: list[VideoOutputConfig | AudioOutputConfig] = [VideoOutputConfig()]
-    send_audio = payload.get("audio", False)
-    if not isinstance(send_audio, bool):
-        raise web.HTTPBadRequest(text="audio must be a boolean")
-    if send_audio:
-        tracks.append(AudioOutputConfig())
-    # internal_url: runner-reachable address (same as the public url on a shared net).
-    publisher = MediaPublish(
-        by_name["out"].get("internal_url", by_name["out"]["url"]),
-        config=MediaPublishConfig(tracks=tracks),
-    )
+        async def _on_frame(decoded) -> None:
+            frame = _transform_frame(decoded, mode)
+            if frame is not None:
+                await publisher.write_frame(frame)
 
-    async def _on_frame(decoded) -> None:
-        frame = _transform_frame(decoded, mode)
-        if frame is not None:
-            await publisher.write_frame(frame)
+        output = MediaOutput(
+            by_name["in"].get("internal_url", by_name["in"]["url"]), on_frame=_on_frame
+        )
 
-    output = MediaOutput(
-        by_name["in"].get("internal_url", by_name["in"]["url"]), on_frame=_on_frame
-    )
+        # Hand public channel urls to the client, so it can send/receive media.
+        state = EchoSession(
+            session_id=session_id,
+            in_url=by_name["in"]["url"],
+            out_url=by_name["out"]["url"],
+            mode=mode,
+            output=output,
+            publisher=publisher,
+        )
+        for task in output.callback_tasks():
+            task.add_done_callback(lambda _t: asyncio.create_task(_close_pipeline()))
+        log.info("started echo session %s", session_id)
+        return state.to_json()
 
-    # Hand public channel urls to the client, so it can send/receive media.
-    state = EchoSession(
-        session_id=session_id,
-        in_url=by_name["in"]["url"],
-        out_url=by_name["out"]["url"],
-        mode=mode,
-        output=output,
-        publisher=publisher,
-    )
-    for task in output.callback_tasks():
-        task.add_done_callback(lambda _task: asyncio.create_task(_close_pipeline()))
-    log.info("started echo session %s", session_id)
-    return web.json_response(state.to_json())
+    @app.post("/update", response_model=SessionResponse, response_model_by_alias=True)
+    async def update(body: UpdateRequest, request: Request) -> dict[str, Any]:
+        session_id = _session_id(request)
+        if state is None:
+            raise HTTPException(404, "echo session not started")
+        if state.session_id != session_id:
+            raise HTTPException(409, "echo runner has a different active session")
+        state.mode.mode = body.mode
+        state.mode.radius = max(1, min(99, body.radius))
+        return state.to_json()
 
-
-async def _handle_update(request: web.Request) -> web.Response:
-    session_id = _session_id(request)
-    if state is None:
-        raise web.HTTPNotFound(text="echo session not started")
-    if state.session_id != session_id:
-        raise web.HTTPConflict(text="echo runner has a different active session")
-
-    # for production apps, handle errors
-    mode = _parse_mode(json.loads(await request.read()))
-    state.mode.mode = mode.mode
-    state.mode.radius = mode.radius
-    return web.json_response(state.to_json())
+    return app
 
 
 def main() -> None:
@@ -265,35 +295,7 @@ def main() -> None:
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
     args = _parse_args()
-
-    async def _on_startup(app: web.Application) -> None:
-        app["registration"] = await register_runner(  # Livepeer: 1
-            args.orchestrator,
-            secret=args.orchSecret,
-            runner_url=args.runner_url,
-            app="livepeer-example/echo",
-            mode="persistent",  # realtime trickle streaming is a held-open session
-            # Metered: the session is billed per second of wall-clock for as long
-            # as the client holds it, which is what a live stream costs.
-            price=args.price,  # USD per hour
-        )
-        log.info(
-            "registered runner_id=%s orchestrator=%s",
-            app["registration"].runner_id,
-            app["registration"].orchestrator_url,
-        )
-
-    async def _on_cleanup(app: web.Application) -> None:
-        await _close_pipeline()
-        with suppress(Exception):
-            await app["registration"].close()  # Livepeer: 3
-
-    app = web.Application()
-    app.router.add_post("/echo", _handle_echo)
-    app.router.add_post("/update", _handle_update)
-    app.on_startup.append(_on_startup)
-    app.on_cleanup.append(_on_cleanup)
-    web.run_app(app, host=args.host, port=DEFAULT_PORT)
+    uvicorn.run(build_app(args), host=args.host, port=DEFAULT_PORT, access_log=False)
 
 
 if __name__ == "__main__":

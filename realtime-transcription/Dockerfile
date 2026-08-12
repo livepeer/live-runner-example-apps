@@ -12,6 +12,7 @@ RUN apt-get update \
 # faster-whisper) loads cuBLAS/cuDNN from the nvidia wheels, so no CUDA base image
 # is needed -- the host driver comes in via the compose `deploy` reservation.
 RUN pip install --no-cache-dir \
+    fastapi uvicorn websockets \
     faster-whisper numpy \
     nvidia-cublas-cu12 nvidia-cudnn-cu12 \
     "livepeer-gateway @ git+https://github.com/livepeer/livepeer-python-gateway@main"

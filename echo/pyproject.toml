@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Echo (trickle realtime video) example app for the Livepeer network."
 requires-python = ">=3.12"
 dependencies = [
+    "fastapi",          # runner: routes + generated OpenAPI schema
+    "uvicorn",          # runner: ASGI server
     "av",               # client + runner: decode/encode video frames
     "opencv-python-headless",  # runner: gray/invert/blur transforms
     "numpy",            # runner: robot ring modulation

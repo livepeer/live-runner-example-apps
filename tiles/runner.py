@@ -11,6 +11,7 @@ Livepeer integration (grep `# Livepeer:`):
   2. registration.close()  — deregister (cleanup)
 
 /tile is an ordinary HTTP handler; its CPU work runs in a thread (parallel tiles).
+FastAPI derives the schema from the models below and serves it at /openapi.json.
 """
 
 from __future__ import annotations
@@ -19,20 +20,19 @@ import argparse
 import asyncio
 import base64
 import logging
-from contextlib import suppress
+from contextlib import asynccontextmanager, suppress
 
 import cv2
 import numpy as np
-from aiohttp import web
+import uvicorn
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
 
 from livepeer_gateway.live_runner import register_runner
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8989
 APP_ID = "livepeer-example/tiles"
-# Tiles are base64 PNGs in JSON; a photographic tile can exceed aiohttp's 1 MB default.
-MAX_REQUEST_BYTES = 32 * 1024 * 1024
-
 log = logging.getLogger("tiles")
 
 
@@ -94,33 +94,18 @@ def _process(png: bytes, work: int) -> bytes:
     return out.tobytes()
 
 
-async def _handle_tile(request: web.Request) -> web.Response:
-    try:
-        payload = await request.json()
-    except Exception:
-        payload = None
-    if not isinstance(payload, dict):
-        raise web.HTTPBadRequest(text="body must be a JSON object")
-    b64 = payload.get("tile")
-    if not isinstance(b64, str) or not b64:
-        raise web.HTTPBadRequest(text="missing 'tile' (base64 PNG)")
-    # Offload the CPU-bound work to a thread so `capacity` concurrent tiles run in
-    # parallel (cv2 releases the GIL); on the event loop they would serialize.
-    loop = asyncio.get_running_loop()
-    out = await loop.run_in_executor(
-        None, _process, base64.b64decode(b64), request.app["work"]
-    )
-    return web.json_response({"tile": base64.b64encode(out).decode()})
+class TileRequest(BaseModel):
+    tile: str = Field(..., min_length=1, description="Base64-encoded PNG tile.")
 
 
-def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
-    )
-    args = _parse_args()
+class TileResponse(BaseModel):
+    tile: str = Field(..., description="Base64-encoded stylized PNG tile.")
 
-    async def _on_startup(app: web.Application) -> None:
-        app["registration"] = await register_runner(  # Livepeer: 1
+
+def build_app(args: argparse.Namespace) -> FastAPI:
+    @asynccontextmanager
+    async def _lifespan(app: FastAPI):
+        app.state.registration = await register_runner(  # Livepeer: 1
             args.orchestrator,
             secret=args.orchSecret,
             runner_url=args.runner_url,
@@ -133,21 +118,38 @@ def main() -> None:
         )
         log.info(
             "registered runner_id=%s capacity=%d orchestrator=%s",
-            app["registration"].runner_id,
+            app.state.registration.runner_id,
             args.capacity,
-            app["registration"].orchestrator_url,
+            app.state.registration.orchestrator_url,
         )
-
-    async def _on_cleanup(app: web.Application) -> None:
+        yield
         with suppress(Exception):
-            await app["registration"].close()  # Livepeer: 2
+            await app.state.registration.close()  # Livepeer: 2
 
-    app = web.Application(client_max_size=MAX_REQUEST_BYTES)
-    app["work"] = args.work
-    app.router.add_post("/tile", _handle_tile)
-    app.on_startup.append(_on_startup)
-    app.on_cleanup.append(_on_cleanup)
-    web.run_app(app, host=args.host, port=DEFAULT_PORT)
+    app = FastAPI(title=APP_ID, version="0.1.0", lifespan=_lifespan)
+
+    @app.post("/tile", response_model=TileResponse)
+    async def tile(body: TileRequest) -> TileResponse:
+        # Offload the CPU-bound work to a thread so `capacity` concurrent tiles run in
+        # parallel (cv2 releases the GIL); on the event loop they would serialize.
+        loop = asyncio.get_running_loop()
+        try:
+            out = await loop.run_in_executor(
+                None, _process, base64.b64decode(body.tile), args.work
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return TileResponse(tile=base64.b64encode(out).decode())
+
+    return app
+
+
+def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+    )
+    args = _parse_args()
+    uvicorn.run(build_app(args), host=args.host, port=DEFAULT_PORT, access_log=False)
 
 
 if __name__ == "__main__":

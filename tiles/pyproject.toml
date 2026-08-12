@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Tiles (capacity fan-out) example app for the Livepeer network."
 requires-python = ">=3.12"
 dependencies = [
+    "fastapi",          # runner: routes + generated OpenAPI schema
+    "uvicorn",          # runner: ASGI server
     "opencv-python-headless",  # runner: stylize tiles; client: split/stitch
     "numpy",
     "aiohttp",

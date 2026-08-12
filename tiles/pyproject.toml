@@ -7,9 +7,5 @@ dependencies = [
     "opencv-python-headless",  # runner: stylize tiles; client: split/stitch
     "numpy",
     "aiohttp",
-    "livepeer-gateway",
+    "livepeer-gateway>=1.0.0",
 ]
-
-# livepeer-gateway is not on PyPI yet; pull it from the branch.
-[tool.uv.sources]
-livepeer-gateway = { git = "https://github.com/livepeer/livepeer-python-gateway", branch = "main" }

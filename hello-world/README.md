@@ -11,7 +11,7 @@ The smallest possible app on the Livepeer network: a synchronous request/respons
 | Pricing      | fixed (one price per call)           |
 | Port         | 8989                                 |
 
-Prerequisites (Docker, `uv`, and the not-yet-released `livepeer-gateway` SDK — pinned in `pyproject.toml`) and the shared on-chain/payment setup live in the [repo README](../README.md).
+Prerequisites (Docker, `uv`, and the [`livepeer-gateway` SDK](https://pypi.org/project/livepeer-gateway/)) and the shared on-chain/payment setup live in the [repo README](../README.md).
 
 ## How it's wired
 
@@ -47,7 +47,7 @@ The app registers with a price (`--price` from `.env`, in USD billed once per ca
 
 ## Run without Docker
 
-Start an orchestrator built from go-livepeer `v0.9.0` or newer (see [Build from source](https://docs.livepeer.org/v1/orchestrators/guides/install-go-livepeer#build-from-source)), then the app and client directly:
+Start an orchestrator built from go-livepeer `v0.9.1` or newer (see [Build from source](https://docs.livepeer.org/v1/orchestrators/guides/install-go-livepeer#build-from-source)), then the app and client directly:
 
 ```sh
 ./livepeer -orchestrator -useLiveRunners -serviceAddr localhost:8935 -orchSecret abcdef -v 6

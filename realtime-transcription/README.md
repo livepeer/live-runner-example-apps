@@ -11,7 +11,7 @@ Realtime speech-to-text on the Livepeer network over a **WebSocket** — the cli
 | Transport    | WebSocket (`/transcribe`)                 |
 | Port         | 8989                                      |
 
-**Requires an NVIDIA GPU.** The model is fixed at `large-v3-turbo`: it swaps large-v3's 32-layer decoder for 4, so it runs far below realtime on a 3090 while staying near large-v3 quality. The device is pinned with it (`cuda`/`float16`) rather than exposed as a flag: on CPU the model loads but falls behind a live stream, which is the one thing this example is about. Prerequisites (Docker, `uv`, the not-yet-released SDK) and the shared on-chain/payment setup are in the [repo README](../README.md).
+**Requires an NVIDIA GPU.** The model is fixed at `large-v3-turbo`: it swaps large-v3's 32-layer decoder for 4, so it runs far below realtime on a 3090 while staying near large-v3 quality. The device is pinned with it (`cuda`/`float16`) rather than exposed as a flag: on CPU the model loads but falls behind a live stream, which is the one thing this example is about. Prerequisites (Docker, `uv`, the [SDK](https://pypi.org/project/livepeer-gateway/)) and the shared on-chain/payment setup are in the [repo README](../README.md).
 
 ## How it's wired
 
@@ -85,7 +85,7 @@ docker compose -f compose.yml -f compose.onchain.yml down
 
 ## Run without Docker
 
-Start an orchestrator built from go-livepeer `v0.9.0` or newer (see [Build from source](https://docs.livepeer.org/v1/orchestrators/guides/install-go-livepeer#build-from-source)), then the app and client directly (the app needs `faster-whisper` installed):
+Start an orchestrator built from go-livepeer `v0.9.1` or newer (see [Build from source](https://docs.livepeer.org/v1/orchestrators/guides/install-go-livepeer#build-from-source)), then the app and client directly (the app needs `faster-whisper` installed):
 
 ```sh
 ./livepeer -orchestrator -useLiveRunners -serviceAddr localhost:8935 -orchSecret abcdef -v 6

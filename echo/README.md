@@ -11,7 +11,7 @@ A realtime video app on the Livepeer network: it receives a live video stream ov
 | Pricing      | hour (metered per second)            |
 | Port         | 8989                                 |
 
-Prerequisites (Docker, `uv`, the not-yet-released SDK) and the shared setup are in the [repo README](../README.md).
+Prerequisites (Docker, `uv`, the [SDK](https://pypi.org/project/livepeer-gateway/)) and the shared setup are in the [repo README](../README.md).
 
 ## How it's wired
 
@@ -115,7 +115,7 @@ A metered session pays **more than once**. The upfront payment that answers the 
 
 ## Run without Docker
 
-Start an orchestrator built from go-livepeer `v0.9.0` or newer (see [Build from source](https://docs.livepeer.org/v1/orchestrators/guides/install-go-livepeer#build-from-source)), then the app and client directly:
+Start an orchestrator built from go-livepeer `v0.9.1` or newer (see [Build from source](https://docs.livepeer.org/v1/orchestrators/guides/install-go-livepeer#build-from-source)), then the app and client directly:
 
 ```sh
 ./livepeer -orchestrator -useLiveRunners -serviceAddr localhost:8935 -orchSecret abcdef -v 6
@@ -123,4 +123,4 @@ uv run runner.py --orchestrator https://localhost:8935 --orchSecret abcdef
 uv run client.py --mode blur sample.mp4
 ```
 
-The paid path needs a newer orchestrator than the offchain one: metered sessions rely on the session-scoped payment URL added after `v0.9.0` ([#4008](https://github.com/livepeer/go-livepeer/pull/4008)), which is why the compose files pin a master build.
+Metered sessions rely on the session-scoped payment URL added in `v0.9.1` ([#4008](https://github.com/livepeer/go-livepeer/pull/4008)), which is the release the compose files pin.

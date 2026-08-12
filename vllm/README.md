@@ -11,7 +11,7 @@ Runs an OpenAI-compatible LLM on the Livepeer network and consumes it with the *
 | Pricing      | hour (metered per second of the call)      |
 | Port         | 8000 (vLLM), 8080 (gateway)                |
 
-**Requires an NVIDIA GPU** for vLLM. The model (`Qwen/Qwen2.5-0.5B-Instruct`) is tiny so it fits a modest card; serving a different one means changing `compose.yml` and `runners.json` together. Prerequisites (Docker, `uv`, the not-yet-released SDK) and the shared on-chain/payment setup are in the [repo README](../README.md).
+**Requires an NVIDIA GPU** for vLLM. The model (`Qwen/Qwen2.5-0.5B-Instruct`) is tiny so it fits a modest card; serving a different one means changing `compose.yml` and `runners.json` together. Prerequisites (Docker, `uv`, the [SDK](https://pypi.org/project/livepeer-gateway/)) and the shared on-chain/payment setup are in the [repo README](../README.md).
 
 ## How it's wired
 

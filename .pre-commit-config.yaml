@@ -24,3 +24,15 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-merge-conflict
+
+  - repo: local
+    hooks:
+      - id: orchestrator-drift
+        # api-proxy and vllm restate the shared orchestrator command because they
+        # add -liveRunnerConfig and `extends` replaces a list. Keep the copies honest.
+        name: orchestrator command drift
+        entry: python3 scripts/check_orchestrator_drift.py
+        language: python
+        additional_dependencies: [pyyaml]
+        pass_filenames: false
+        files: ^(compose\.orchestrator\.yml|compose\.onchain\.yml|[^/]+/compose(\.onchain)?\.yml)$

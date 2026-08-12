@@ -25,18 +25,27 @@ from dataclasses import dataclass
 from typing import Any
 
 import av
+import numpy as np
 from aiohttp import web
 
 from livepeer_gateway.live_runner import register_runner
 from livepeer_gateway.media_decode import AudioDecodedMediaFrame, VideoDecodedMediaFrame
 from livepeer_gateway.media_output import MediaOutput
-from livepeer_gateway.media_publish import MediaPublish
+from livepeer_gateway.media_publish import (
+    AudioOutputConfig,
+    MediaPublish,
+    MediaPublishConfig,
+    VideoOutputConfig,
+)
 
 log = logging.getLogger("echo")
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8989
-MODES = frozenset({"echo", "gray", "invert", "blur"})
+MODES = frozenset({"echo", "gray", "invert", "blur", "robot"})
+# "robot" multiplies each sample by a sine at this frequency; the sample count is
+# unchanged, so audio stays in sync with video.
+ROBOT_HZ = 220.0
 
 state: EchoSession | None = None
 
@@ -121,15 +130,37 @@ def _odd_kernel(radius: int) -> int:
     return min(kernel, 99)
 
 
+def _robot_audio(frame: av.AudioFrame) -> av.AudioFrame:
+    # sample[i] *= sin(2*pi*ROBOT_HZ*t[i]). The carrier phase comes from the frame's
+    # own timestamp, so it stays continuous across frames (no clicks) without keeping
+    # state, and |carrier| <= 1 means it cannot clip.
+    samples = frame.to_ndarray()
+    t0 = float(frame.pts * frame.time_base) if frame.pts is not None else 0.0
+    t = t0 + np.arange(samples.shape[-1], dtype=np.float32) / frame.sample_rate
+    carrier = np.sin(2.0 * np.pi * ROBOT_HZ * t).astype(np.float32)
+    out = av.AudioFrame.from_ndarray(
+        (samples.astype(np.float32) * carrier).astype(samples.dtype),
+        format=frame.format.name,
+        layout=frame.layout.name,
+    )
+    out.sample_rate = frame.sample_rate
+    out.pts = frame.pts
+    out.time_base = frame.time_base
+    return out
+
+
 def _transform_frame(
     decoded: AudioDecodedMediaFrame | VideoDecodedMediaFrame,
     mode: ModeState,
-) -> av.VideoFrame | None:
+) -> av.VideoFrame | av.AudioFrame | None:
+    frame = decoded.frame
+    if decoded.kind == "audio":
+        # Audio rides along untouched; only "robot" transforms it.
+        return _robot_audio(frame) if mode.mode == "robot" else frame
     if decoded.kind != "video":
         return None
 
-    frame = decoded.frame
-    if mode.mode == "echo":
+    if mode.mode in ("echo", "robot"):  # robot changes audio only
         return frame
 
     import cv2
@@ -175,9 +206,21 @@ async def _handle_echo(request: web.Request) -> web.Response:
         )
 
     # for production apps, handle errors
-    mode = _parse_mode(json.loads(await request.read()))
+    payload = json.loads(await request.read())
+    mode = _parse_mode(payload)
+    # Tracks are declared upfront and the container waits for a first frame on each,
+    # so only declare audio when the client says it is sending some.
+    tracks: list[VideoOutputConfig | AudioOutputConfig] = [VideoOutputConfig()]
+    send_audio = payload.get("audio", False)
+    if not isinstance(send_audio, bool):
+        raise web.HTTPBadRequest(text="audio must be a boolean")
+    if send_audio:
+        tracks.append(AudioOutputConfig())
     # internal_url: runner-reachable address (same as the public url on a shared net).
-    publisher = MediaPublish(by_name["out"].get("internal_url", by_name["out"]["url"]))
+    publisher = MediaPublish(
+        by_name["out"].get("internal_url", by_name["out"]["url"]),
+        config=MediaPublishConfig(tracks=tracks),
+    )
 
     async def _on_frame(decoded) -> None:
         frame = _transform_frame(decoded, mode)

@@ -22,9 +22,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import threading
 import sys
 import time
+from collections.abc import AsyncIterator, Iterator
 from contextlib import nullcontext, suppress
+from queue import Queue
 from pathlib import Path
 
 import av
@@ -105,6 +108,36 @@ def _channel_url(echo_response: dict[str, object], name: str) -> str:
     return url
 
 
+async def _decode_in_thread(
+    frames: Iterator[av.VideoFrame | av.AudioFrame],
+) -> AsyncIterator[av.VideoFrame | av.AudioFrame]:
+    """Yield decoded frames without decoding on the event loop.
+
+    PyAV's decode() is a blocking generator, so driving the publish loop from it
+    directly stalls the async segment uploads while a frame is being decoded. The
+    queue is small on purpose: it decouples the two without adding latency.
+    """
+    queue: Queue[av.VideoFrame | av.AudioFrame | None] = Queue(maxsize=8)
+
+    def _pump() -> None:
+        try:
+            for frame in frames:
+                queue.put(frame)
+        finally:
+            queue.put(None)
+
+    thread = threading.Thread(target=_pump, daemon=True)
+    thread.start()
+    try:
+        while True:
+            frame = await asyncio.to_thread(queue.get)
+            if frame is None:
+                return
+            yield frame
+    finally:
+        thread.join(timeout=1.0)
+
+
 async def _publish_video(
     input_source: str,
     publish_url: str,
@@ -150,7 +183,7 @@ async def _publish_video(
             # decode() yields both streams interleaved; without audio, stay on the
             # video stream alone. Pacing and the blur sweep run off video frames only.
             frames = input_.decode() if send_audio else input_.decode(video=0)
-            for frame in frames:
+            async for frame in _decode_in_thread(frames):
                 if not isinstance(frame, av.VideoFrame):
                     await publisher.write_frame(frame)
                     continue

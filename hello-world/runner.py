@@ -1,21 +1,24 @@
 #!/usr/bin/env python3
-"""hello-world app: a normal aiohttp service, made callable on the Livepeer network.
+"""hello-world app: a normal FastAPI service, made callable on the Livepeer network.
 
 Livepeer integration (grep `# Livepeer:`):
   1. register_runner()     — announce the app to the orchestrator (startup)
   2. registration.close()  — deregister (cleanup)
 
 /hello is an ordinary HTTP handler; being on the network doesn't change how you write
-it.
+it. FastAPI derives the request/response schema from the models below and serves it at
+/openapi.json, so callers can discover the interface without reading this file.
 """
 
 from __future__ import annotations
 
 import argparse
 import logging
-from contextlib import suppress
+from contextlib import asynccontextmanager, suppress
 
-from aiohttp import web
+import uvicorn
+from fastapi import FastAPI
+from pydantic import BaseModel, Field
 
 from livepeer_gateway.live_runner import register_runner
 
@@ -43,25 +46,18 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-async def _handle_hello(request: web.Request) -> web.Response:
-    try:
-        payload = await request.json()
-    except Exception:
-        payload = None
-    if not isinstance(payload, dict):
-        raise web.HTTPBadRequest(text="body must be a JSON object")
-    name = str(payload.get("name", "world"))
-    return web.json_response({"message": f"Hello, {name}!"})
+class HelloRequest(BaseModel):
+    name: str = Field("world", description="Who to greet.")
 
 
-def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
-    )
-    args = _parse_args()
+class HelloResponse(BaseModel):
+    message: str
 
-    async def _on_startup(app: web.Application) -> None:
-        app["registration"] = await register_runner(  # Livepeer: 1
+
+def build_app(args: argparse.Namespace) -> FastAPI:
+    @asynccontextmanager
+    async def _lifespan(app: FastAPI):
+        app.state.registration = await register_runner(  # Livepeer: 1
             args.orchestrator,
             secret=args.orchSecret,
             runner_url=args.runner_url,
@@ -73,19 +69,28 @@ def main() -> None:
         )
         log.info(
             "registered runner_id=%s orchestrator=%s",
-            app["registration"].runner_id,
-            app["registration"].orchestrator_url,
+            app.state.registration.runner_id,
+            app.state.registration.orchestrator_url,
         )
-
-    async def _on_cleanup(app: web.Application) -> None:
+        yield
         with suppress(Exception):
-            await app["registration"].close()  # Livepeer: 2
+            await app.state.registration.close()  # Livepeer: 2
 
-    app = web.Application()
-    app.router.add_post("/hello", _handle_hello)
-    app.on_startup.append(_on_startup)
-    app.on_cleanup.append(_on_cleanup)
-    web.run_app(app, host=args.host, port=DEFAULT_PORT)
+    app = FastAPI(title=APP_ID, version="0.1.0", lifespan=_lifespan)
+
+    @app.post("/hello", response_model=HelloResponse)
+    async def hello(body: HelloRequest) -> HelloResponse:
+        return HelloResponse(message=f"Hello, {body.name}!")
+
+    return app
+
+
+def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+    )
+    args = _parse_args()
+    uvicorn.run(build_app(args), host=args.host, port=DEFAULT_PORT, access_log=False)
 
 
 if __name__ == "__main__":

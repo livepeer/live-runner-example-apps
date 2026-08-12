@@ -1,4 +1,4 @@
-# Hello-world example app (http server).
+# Hello-world example app (FastAPI http server).
 FROM python:3.12-slim
 
 # Flush stdout/stderr immediately so output isn't block-buffered in `docker logs`.
@@ -10,6 +10,7 @@ RUN apt-get update \
 
 # livepeer-gateway SDK isn't on PyPI yet; install from Git.
 RUN pip install --no-cache-dir \
+    fastapi uvicorn \
     "livepeer-gateway @ git+https://github.com/livepeer/livepeer-python-gateway@main"
 
 WORKDIR /app

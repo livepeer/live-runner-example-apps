@@ -2,6 +2,9 @@
 # model URL and injects the operator's token. The orchestrator health-polls
 # /health and reverse-proxies caller requests to /proxy. HF_TOKEN and MODEL are
 # substituted from the environment by the nginx image's template mechanism.
+#
+# One template, one model, one capability. compose.yml runs this same file twice
+# with a different MODEL, which is how the operator offers two.
 server {
     listen 8989;
 

@@ -1,13 +1,19 @@
-# The whole runner: a stock nginx forwards each call to one pinned Hugging Face
+# The whole runner: a stock nginx forwards each call to a pinned Hugging Face
 # model URL and injects the operator's token. The orchestrator health-polls
-# /health and reverse-proxies caller requests to /proxy. HF_TOKEN and MODEL are
-# substituted from the environment by the nginx image's template mechanism.
+# /health and reverse-proxies caller requests to <model>/proxy. HF_TOKEN and the
+# MODEL_* vars are substituted from the environment by the nginx image's
+# template mechanism.
 #
-# One template, one model, one capability. compose.yml runs this same file twice
-# with a different MODEL, which is how the operator offers two.
+# One process, one route per capability. runners.json points each app id at its
+# own path (http://app:8989/sd3), and the orchestrator preserves that path when
+# it forwards, so the two registrations land on different location blocks. A
+# capability is a registration, not a container.
 server {
     listen 8989;
 
+    # One health endpoint for both capabilities: `return 200` only ever reported
+    # that nginx is up, never that an upstream model or the token is still good,
+    # so a per-capability copy would claim a precision it does not have.
     location = /health {
         default_type application/json;
         return 200 '{"status":"ok"}';
@@ -17,10 +23,10 @@ server {
     # be spent on exactly this model, callers choose nothing but the payload.
     # Method and query string are part of "nothing": nginx would forward both
     # upstream as the caller sent them, so pin the method and drop the args.
-    location = /proxy {
+    location = /sd3/proxy {
         limit_except POST { deny all; }
         set $args '';
-        proxy_pass https://router.huggingface.co/hf-inference/models/${MODEL};
+        proxy_pass https://router.huggingface.co/hf-inference/models/${MODEL_SD3};
         proxy_set_header Authorization "Bearer ${HF_TOKEN}";
         # Hugging Face content-negotiates: with the SDK's Accept:
         # application/json it answers with a base64 PNG in a JSON string
@@ -28,5 +34,17 @@ server {
         proxy_set_header Accept "image/jpeg";
         proxy_ssl_server_name on;
         proxy_read_timeout 120s;  # a hosted diffusion model can take tens of seconds
+    }
+
+    # The same block against a different model. Offering one more capability is
+    # one more location here plus one more runners.json entry.
+    location = /flux/proxy {
+        limit_except POST { deny all; }
+        set $args '';
+        proxy_pass https://router.huggingface.co/hf-inference/models/${MODEL_FLUX};
+        proxy_set_header Authorization "Bearer ${HF_TOKEN}";
+        proxy_set_header Accept "image/jpeg";
+        proxy_ssl_server_name on;
+        proxy_read_timeout 120s;
     }
 }

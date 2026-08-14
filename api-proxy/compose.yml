@@ -1,7 +1,7 @@
-# End-to-end offchain demo: orchestrator + the api-proxy "app" — two stock nginx
-# services attached as static runners via runners.json (-liveRunnerConfig). There
-# is no app code at all: nginx.conf.template is the whole runner, and each service
-# is one capability because it pins one model.
+# End-to-end offchain demo: orchestrator + the api-proxy "app" — a stock nginx
+# attached as two static runners via runners.json (-liveRunnerConfig). There is
+# no app code at all: nginx.conf.template is the whole runner, and it serves two
+# capabilities from one process because a capability is a registration.
 #
 # Needs HF_TOKEN (the upstream credential nginx injects) in a local .env — copy
 # .env.example. Once up, call it from the host with the SDK:
@@ -29,27 +29,17 @@ services:
     volumes:
       - ./runners.json:/config/runners.json:ro
 
-  # One service per capability. Both run the same template and the same
-  # credential; only MODEL differs, and runners.json prices them separately.
-  sd3:
+  app:
     image: nginx:1.27-alpine
-    container_name: example_apps_api_proxy_sd3
+    container_name: example_apps_api_proxy
     environment:
       # The operator-held upstream credential (huggingface.co → settings → tokens).
       - HF_TOKEN=${HF_TOKEN:?set HF_TOKEN in .env (copy .env.example)}
-      # The one model this runner offers; swap it here, and rename the app id
-      # in runners.json to match (the app id is what callers discover).
-      - MODEL=stabilityai/stable-diffusion-3-medium-diffusers
-    volumes:
-      - ./nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
-
-  flux:
-    image: nginx:1.27-alpine
-    container_name: example_apps_api_proxy_flux
-    environment:
-      - HF_TOKEN=${HF_TOKEN:?set HF_TOKEN in .env (copy .env.example)}
-      # A faster, cheaper model than sd3 — which is why it is a separate
-      # capability at a separate price rather than a flag on the first one.
-      - MODEL=black-forest-labs/FLUX.1-schnell
+      # One model per route in nginx.conf.template. Swap one here and rename its
+      # app id in runners.json to match (the app id is what callers discover).
+      - MODEL_SD3=stabilityai/stable-diffusion-3-medium-diffusers
+      # Faster and cheaper than sd3 — which is why it is a separate capability
+      # at a separate price rather than a flag on the first one.
+      - MODEL_FLUX=black-forest-labs/FLUX.1-schnell
     volumes:
       - ./nginx.conf.template:/etc/nginx/templates/default.conf.template:ro

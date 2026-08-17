@@ -7,7 +7,7 @@ Thank you for considering contributing to the live runner example apps. These ar
 This repo covers each value of the example axes (registration, mode, transport, pricing) once — it is not a collection of apps built on the runner.
 
 - **In scope** — bug fixes, doc improvements, and new examples that fill a gap in the README's axis table. Open an issue first to agree on the gap.
-- **Out of scope** — new app examples that don't add axis coverage. Publish those in your own repo (name it `<app>-livepeer-runner`, add the `livepeer-runner` GitHub topic, mention Livepeer in the description) and open a PR that adds one row to the README's [External examples](./README.md#external-examples) table.
+- **Out of scope** — new app examples that don't add axis coverage. Publish those in your own repo and open a PR that adds one row to the README's [External examples](./README.md#external-examples) table. Start from [template-livepeer-runner](https://github.com/livepeer/template-livepeer-runner), which is self-contained and ships the naming convention as a checklist: name the repo `<app>-livepeer-runner`, add the `livepeer-runner` GitHub topic, mention Livepeer in the description. Don't copy an example directory out of this repo — its `compose.yml` references shared files one level up and won't run on its own.
 
 ## Getting Started
 

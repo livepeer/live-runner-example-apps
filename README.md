@@ -4,7 +4,9 @@ Example **apps that run on** the Livepeer **live runner** — [go-livepeer](http
 
 The point is to **swap the compute without changing your app — permissionlessly, no lock-in**. Your app stays a plain service with little or no Livepeer-specific code, so you're never tied to us. And the network is permissionless: anyone can run or extend it, no one gatekeeps what you deploy, and no single party can take your app down. Write the app once; **move the compute freely**.
 
-Offchain runs are free and need no wallet:
+## Quick start
+
+Try it locally — free, no wallet:
 
 ```sh
 cd hello-world
@@ -100,9 +102,9 @@ The client side depends on the runner's mode:
 
 Each example's `client.py` shows its exact calls — grep `# Livepeer:` to find them.
 
-## Running the examples
+## Shared setup
 
-Each example is self-contained and its README has the run commands. Everything below is the **shared setup** they all build on — the examples spin up a local orchestrator (and, on-chain, a signer) via the compose files here, so you set this up once, not per example.
+Each example is self-contained and its README has the run commands. Everything below is the setup they all build on — the examples spin up a local orchestrator (and, on-chain, a signer) via the compose files here, so you set this up once, not per example.
 
 ### Prerequisites
 

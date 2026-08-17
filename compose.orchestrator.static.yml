@@ -1,0 +1,23 @@
+# Shared orchestrator for **static** runners, offchain.
+#
+# Same as compose.orchestrator.yml plus -liveRunnerConfig, which static runners need
+# to declare themselves. It exists as its own file because `extends` replaces a
+# command list rather than appending to it, so a static example cannot extend the
+# dynamic one and add a flag. Mount your runners.json at /config/runners.json.
+
+services:
+  orchestrator:
+    extends:
+      file: compose.orchestrator.yml
+      service: orchestrator
+    command:
+      - -orchestrator
+      - -useLiveRunners
+      - -serviceAddr=127.0.0.1:8935
+      - -httpAddr=0.0.0.0:8935
+      - -liveRunnerAddr=https://orchestrator:8935
+      - -orchSecret=abcdef
+      - -network=offchain
+      - -liveRunnerConfig=/config/runners.json
+      - -monitor=false
+      - -v=6

@@ -10,21 +10,8 @@
 services:
   orchestrator:
     extends:
-      file: ../compose.orchestrator.yml
+      file: ../compose.orchestrator.static.yml
       service: orchestrator
-    # `extends` can't append a single flag to `command`, so the command is
-    # restated here with -liveRunnerConfig added and runners.json mounted in.
-    command:
-      - -orchestrator
-      - -useLiveRunners
-      - -serviceAddr=127.0.0.1:8935
-      - -httpAddr=0.0.0.0:8935
-      - -liveRunnerAddr=https://orchestrator:8935
-      - -orchSecret=abcdef
-      - -network=offchain
-      - -monitor=false
-      - -liveRunnerConfig=/config/runners.json
-      - -v=6
     volumes:
       - ./runners.json:/config/runners.json:ro
 

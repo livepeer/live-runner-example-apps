@@ -6,7 +6,7 @@ The point is to **swap the compute without changing your app — permissionlessl
 
 ## Quick start
 
-Try it locally — free, no wallet:
+Try it locally. Free, no wallet:
 
 ```sh
 cd hello-world

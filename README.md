@@ -99,7 +99,9 @@ Apps that integrate the live runner and live in their own repos — production d
 | [livepeer/api-proxy](https://github.com/livepeer/api-proxy)                                           | Attach several API endpoints dynamically — key storage and request stats for operators   | HTTP                |
 | [Gideonjon/vllm-realtime-livepeer-runner](https://github.com/Gideonjon/vllm-realtime-livepeer-runner) | Real-time speech-to-text — trickle audio in, WebSocket transcript out, with live metrics | WebSocket + trickle |
 
-Built one? [Open a PR](https://github.com/livepeer/runner-app-examples/compare) that adds a row. To make your repo easy to find, follow the community convention:
+**Building one?** Start from [**template-livepeer-runner**](https://github.com/livepeer/template-livepeer-runner) — a working app, client, and compose setup you can run in one command, offchain or on-chain. The examples here are not copyable as-is: each one's `compose.yml` pulls the orchestrator from a shared file one directory up.
+
+Then [open a PR](https://github.com/livepeer/runner-app-examples/compare) that adds a row. To make your repo easy to find, follow the community convention (the template's README walks through it):
 
 - Name the repo `<app>-livepeer-runner` (e.g. `comfyui-livepeer-runner`).
 - Add the `livepeer-runner` GitHub topic.

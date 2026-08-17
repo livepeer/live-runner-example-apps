@@ -2,7 +2,7 @@
 
 Example **apps that run on** the Livepeer **live runner** — [go-livepeer](https://github.com/livepeer/go-livepeer)'s new way to run any app on the network, shipping in mainline since [v0.9.0](https://github.com/livepeer/go-livepeer/releases/tag/v0.9.0). Each app is a plain HTTP / WebSocket / video service: an orchestrator running the live runner **hosts** it, and a client **calls** it through the orchestrator with the [livepeer-gateway](https://github.com/livepeer/livepeer-python-gateway) **SDK**.
 
-The point is to **swap the compute without changing your app: permissionlessly, no lock-in**. Your app stays a plain service with little or no Livepeer-specific code, so you're never tied to us. And the network is permissionless: anyone can run or extend it, no one gatekeeps what you deploy, and no single party can take your app down. Write the app once; **move the compute freely**.
+The point is to **swap the compute without changing your app**, permissionlessly and with no lock-in. Your app stays a plain service with little or no Livepeer-specific code, so you're never tied to us. And the network is permissionless: anyone can run or extend it, no one gatekeeps what you deploy, and no single party can take your app down. Write the app once; **move the compute freely**.
 
 ## Quick start
 
@@ -54,7 +54,7 @@ Need a transport that isn't here? [Open an issue](https://github.com/livepeer/ru
 | [`vllm`](./vllm)                                     | Drop-in OpenAI API; the client stays unmodified                                       | static       | single-shot | HTTP + SSE        | hour    |
 | [`realtime-transcription`](./realtime-transcription) | Audio up, transcripts back, on one socket                                             | dynamic      | persistent  | WebSocket         | hour    |
 
-Start with `hello-world` (the smallest end-to-end path); the others each layer on one new idea. More will follow, including a full example that exercises every feature. Each is self-contained and runs **offchain** (free, no wallet); most also run **on-chain** (paid): see each README.
+Start with `hello-world` (the smallest end-to-end path); the others each layer on one new idea. More will follow, including a full example that exercises every feature. Each is self-contained and runs **offchain** (free, no wallet); most also run **on-chain** (paid) — see each README.
 
 This set stays **minimal and curated**: it covers each value of the axes above (registration, mode, transport, pricing), not one example per app. New examples land here only when they fill a gap in that table — apps built on the runner belong in their own repos, listed under [External examples](#external-examples).
 
@@ -65,10 +65,12 @@ How the app attaches to the orchestrator:
 - **Dynamic** — the app self-registers via the SDK (`register_runner`) and heartbeats; the orchestrator drops it when heartbeats stop. Best for apps that come and go. (`hello-world`, `echo`, `realtime-transcription`)
 - **Static** — the orchestrator is configured with the app's URL in a `runners.json` and health-polls it; the app needs no SDK. Best for fixed, long-running deployments. (`vllm`, `api-proxy`)
 
-<details>
-<summary>Both forms also take an optional <code>metadata</code> string, which no example uses</summary>
+Both forms also take an optional **`metadata`** string: up to 1 KB of app-controlled UTF-8 for detail the protocol doesn't model, echoed in `/discovery` and never read by the orchestrator. **Discovery and selection ignore it**, filtering only on `app` and `gpu`, so anything a caller selects or pays differently for belongs in the app id instead. That is why no example here uses it.
 
-Up to 1 KB of app-controlled UTF-8 for detail the protocol doesn't model, echoed in `/discovery` and never read by the orchestrator. Clients read it off the discovered runner, whose `raw` holds that runner's discovery entry: `cursor.candidates[0].raw["metadata"]` after `runner_selector`, `session.runner.raw["metadata"]` after `reserve_session`. Anything a caller **selects or pays differently for** belongs in the app id instead: discovery filters on `app` and `gpu`, never on metadata, which is why no example here uses it.
+<details>
+<summary>Reading <code>metadata</code> from the client</summary>
+
+Clients read it off the discovered runner, whose `raw` holds that runner's discovery entry: `cursor.candidates[0].raw["metadata"]` after `runner_selector`, `session.runner.raw["metadata"]` after `reserve_session`.
 
 </details>
 
@@ -141,7 +143,7 @@ Before running a client, confirm the orchestrator actually advertises your runne
 curl -sk https://localhost:8935/discovery | jq
 ```
 
-Each entry lists its `runners` with an `app`, `version`, capacity, and `price_info`. The orchestrator republishes your USD price converted to wei: `price` in wei with `currency: wei` and `unit: seconds` (`720p-pixel-seconds` for per-pixel video, `fixed` for once-per-session pricing). Check that your app appears and the price is non-zero.
+Each entry lists its `runners` with an `app`, `version`, capacity, and `price_info`. The orchestrator republishes your USD price converted to wei — `price` in wei with `currency: wei` and `unit: seconds` (`720p-pixel-seconds` for per-pixel video, `fixed` for once-per-session pricing). Check that your app appears and the price is non-zero.
 
 ### Conventions
 
@@ -150,7 +152,7 @@ Each entry lists its `runners` with an `app`, `version`, capacity, and `price_in
 
 ## External examples
 
-Apps that integrate the live runner and live in their own repos, production deployments and standalone examples alike. This table is links-only: the code, CI, and support stay with the author.
+Apps that integrate the live runner and live in their own repos — production deployments and standalone examples alike. This table is links-only: the code, CI, and support stay with the author.
 
 | Project                                                                                               | What it is                                                                               | Transport           |
 | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------- |
@@ -158,7 +160,7 @@ Apps that integrate the live runner and live in their own repos, production depl
 | [livepeer/api-proxy](https://github.com/livepeer/api-proxy)                                           | Attach several API endpoints dynamically — key storage and request stats for operators   | HTTP                |
 | [Gideonjon/vllm-realtime-livepeer-runner](https://github.com/Gideonjon/vllm-realtime-livepeer-runner) | Real-time speech-to-text — trickle audio in, WebSocket transcript out, with live metrics | WebSocket + trickle |
 
-**Building one?** Start from [**template-livepeer-runner**](https://github.com/livepeer/template-livepeer-runner): a working app, client, and compose setup you can run in one command, offchain or on-chain. The examples here are not copyable as-is: each one's `compose.yml` pulls the orchestrator from a shared file one directory up.
+**Building one?** Start from [**template-livepeer-runner**](https://github.com/livepeer/template-livepeer-runner) — a working app, client, and compose setup you can run in one command, offchain or on-chain. The examples here are not copyable as-is: each one's `compose.yml` pulls the orchestrator from a shared file one directory up.
 
 Then [open a PR](https://github.com/livepeer/runner-app-examples/compare) that adds a row. To make your repo easy to find, follow the community convention (the template's README walks through it):
 

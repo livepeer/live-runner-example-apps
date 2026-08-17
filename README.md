@@ -97,7 +97,7 @@ Apps that integrate the live runner and live in their own repos — production d
 | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------- |
 | [daydreamlive/scope](https://github.com/daydreamlive/scope/tree/ja/runner) | Real-time AI video with downloadable LoRA models                                       | WebSocket + trickle |
 | [livepeer/api-proxy](https://github.com/livepeer/api-proxy)                | Attach several API endpoints dynamically — key storage and request stats for operators | HTTP                |
-| [Gideonjon/vllm-realtime-livepeer-runner](https://github.com/Gideonjon/vllm-realtime-livepeer-runner) | Realtime speech-to-text — Trickle audio in, WebSocket transcript out, with live metrics | trickle + WebSocket |
+| [Gideonjon/vllm-realtime-livepeer-runner](https://github.com/Gideonjon/vllm-realtime-livepeer-runner) | Real-time speech-to-text — trickle audio in, WebSocket transcript out, with live metrics | WebSocket + trickle |
 
 Built one? [Open a PR](https://github.com/livepeer/runner-app-examples/compare) that adds a row. To make your repo easy to find, follow the community convention:
 

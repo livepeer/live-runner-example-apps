@@ -1,0 +1,29 @@
+# On-chain overlay for **static** runners.
+#
+# Same as compose.onchain.yml plus -liveRunnerConfig. Separate for the same reason:
+# `extends` replaces a command list, so the flag cannot simply be appended.
+
+services:
+  orchestrator:
+    extends:
+      file: compose.onchain.yml
+      service: orchestrator
+    command:
+      - -orchestrator
+      - -useLiveRunners
+      - -serviceAddr=127.0.0.1:8935
+      - -httpAddr=0.0.0.0:8935
+      - -liveRunnerAddr=https://orchestrator:8935
+      - -orchSecret=abcdef
+      - -network=${NETWORK}
+      - -ethUrl=${ETH_RPC_URL}
+      - -ethKeystorePath=/keystore
+      - -ethAcctAddr=${ORCH_ETH_ACCT}
+      - -ethPassword=${ORCH_ETH_PASSWORD}
+      - -ethOrchAddr=${ORCH_ONCHAIN_ADDR}
+      - -pricePerUnit=0
+      - -ticketEV=10000000000
+      - -maxFaceValue=4000000000000000
+      - -liveRunnerConfig=/config/runners.json
+      - -monitor=false
+      - -v=6

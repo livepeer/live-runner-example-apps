@@ -1,13 +1,10 @@
 # Example apps for the Livepeer live runner
 
-Example **apps that run on** the Livepeer **live runner** — [go-livepeer](https://github.com/livepeer/go-livepeer)'s new way to run any app on the network. Each app is a plain HTTP / WebSocket / video service: an orchestrator running the live runner **hosts** it, and a client **calls** it through the orchestrator with the [livepeer-gateway](https://github.com/livepeer/livepeer-python-gateway) **SDK**.
+Example **apps that run on** the Livepeer **live runner** — [go-livepeer](https://github.com/livepeer/go-livepeer)'s new way to run any app on the network, shipping in mainline since [v0.9.0](https://github.com/livepeer/go-livepeer/releases/tag/v0.9.0). Each app is a plain HTTP / WebSocket / video service: an orchestrator running the live runner **hosts** it, and a client **calls** it through the orchestrator with the [livepeer-gateway](https://github.com/livepeer/livepeer-python-gateway) **SDK**.
 
 The point is to **swap the compute without changing your app — permissionlessly, no lock-in**. Your app stays a plain service with little or no Livepeer-specific code, so you're never tied to us. And the network is permissionless: anyone can run or extend it, no one gatekeeps what you deploy, and no single party can take your app down. Write the app once; **move the compute freely**.
 
-> [!NOTE]
-> Live runners ship in mainline go-livepeer since [v0.9.0](https://github.com/livepeer/go-livepeer/releases/tag/v0.9.0), and the Python SDK is on PyPI as [`livepeer-gateway`](https://pypi.org/project/livepeer-gateway/).
-
-Needs [Docker](https://docs.docker.com/get-started/get-docker/) and [`uv`](https://docs.astral.sh/uv/), nothing else — offchain runs are free and need no wallet:
+Offchain runs are free and need no wallet:
 
 ```sh
 cd hello-world
@@ -15,8 +12,6 @@ docker compose up -d --build   # orchestrator + the app
 uv run client.py               # call it through the orchestrator
 docker compose down
 ```
-
-That is the whole loop. [Running the examples](#running-the-examples) covers the shared setup, and each example's README covers its own.
 
 ## How it works
 

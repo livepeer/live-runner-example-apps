@@ -7,6 +7,17 @@ The point is to **swap the compute without changing your app — permissionlessl
 > [!NOTE]
 > Live runners ship in mainline go-livepeer since [v0.9.0](https://github.com/livepeer/go-livepeer/releases/tag/v0.9.0), and the Python SDK is on PyPI as [`livepeer-gateway`](https://pypi.org/project/livepeer-gateway/).
 
+Needs [Docker](https://docs.docker.com/get-started/get-docker/) and [`uv`](https://docs.astral.sh/uv/), nothing else — offchain runs are free and need no wallet:
+
+```sh
+cd hello-world
+docker compose up -d --build   # orchestrator + the app
+uv run client.py               # call it through the orchestrator
+docker compose down
+```
+
+That is the whole loop. [Running the examples](#running-the-examples) covers the shared setup, and each example's README covers its own.
+
 ## How it works
 
 Your app is a plain service that clients reach _through_ the orchestrator — the SDK handles discovery / session / payment, and, on-chain, a remote signer settles it. The client never talks to your app directly.
@@ -24,7 +35,7 @@ flowchart LR
   signer <-.->|"micropayment tickets"| orch
 ```
 
-## Communication schemas
+## Transports
 
 The orchestrator is a **transparent reverse proxy**: every endpoint you expose is passed through to your app unchanged, so you write an ordinary service and it runs on the network as-is. The transports supported today:
 
@@ -33,7 +44,7 @@ The orchestrator is a **transparent reverse proxy**: every endpoint you expose i
 - **Trickle** — continuous realtime video in/out. (`echo`)
 - **WebSocket** — long-lived bidirectional sessions. (`realtime-transcription`)
 
-Need a schema that isn't here? [Open an issue](https://github.com/livepeer/runner-app-examples/issues).
+Need a transport that isn't here? [Open an issue](https://github.com/livepeer/runner-app-examples/issues).
 
 ## Examples
 
@@ -57,7 +68,12 @@ How the app attaches to the orchestrator:
 - **Dynamic** — the app self-registers via the SDK (`register_runner`) and heartbeats; the orchestrator drops it when heartbeats stop. Best for apps that come and go. (`hello-world`, `echo`, `realtime-transcription`)
 - **Static** — the orchestrator is configured with the app's URL in a `runners.json` and health-polls it; the app needs no SDK. Best for fixed, long-running deployments. (`vllm`, `api-proxy`)
 
-Both forms also take an optional **`metadata`** string: up to 1 KB of app-controlled UTF-8 for detail the protocol doesn't model, echoed in `/discovery` and never read by the orchestrator. Clients read it off the discovered runner, whose `raw` holds that runner's discovery entry: `cursor.candidates[0].raw["metadata"]` after `runner_selector`, `session.runner.raw["metadata"]` after `reserve_session`. Anything a caller **selects or pays differently for** belongs in the app id instead: discovery filters on `app` and `gpu`, never on metadata, which is why no example here uses it.
+<details>
+<summary>Both forms also take an optional <code>metadata</code> string, which no example uses</summary>
+
+Up to 1 KB of app-controlled UTF-8 for detail the protocol doesn't model, echoed in `/discovery` and never read by the orchestrator. Clients read it off the discovered runner, whose `raw` holds that runner's discovery entry: `cursor.candidates[0].raw["metadata"]` after `runner_selector`, `session.runner.raw["metadata"]` after `reserve_session`. Anything a caller **selects or pays differently for** belongs in the app id instead: discovery filters on `app` and `gpu`, never on metadata, which is why no example here uses it.
+
+</details>
 
 The arrow flips — dynamic, the app announces itself; static, the orchestrator is told about a passive app:
 
@@ -89,24 +105,6 @@ The client side depends on the runner's mode:
 
 Each example's `client.py` shows its exact calls — grep `# Livepeer:` to find them.
 
-## External examples
-
-Apps that integrate the live runner and live in their own repos — production deployments and standalone examples alike. This table is links-only: the code, CI, and support stay with the author.
-
-| Project                                                                                               | What it is                                                                               | Transport           |
-| ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------- |
-| [daydreamlive/scope](https://github.com/daydreamlive/scope/tree/ja/runner)                            | Real-time AI video with downloadable LoRA models                                         | WebSocket + trickle |
-| [livepeer/api-proxy](https://github.com/livepeer/api-proxy)                                           | Attach several API endpoints dynamically — key storage and request stats for operators   | HTTP                |
-| [Gideonjon/vllm-realtime-livepeer-runner](https://github.com/Gideonjon/vllm-realtime-livepeer-runner) | Real-time speech-to-text — trickle audio in, WebSocket transcript out, with live metrics | WebSocket + trickle |
-
-**Building one?** Start from [**template-livepeer-runner**](https://github.com/livepeer/template-livepeer-runner) — a working app, client, and compose setup you can run in one command, offchain or on-chain. The examples here are not copyable as-is: each one's `compose.yml` pulls the orchestrator from a shared file one directory up.
-
-Then [open a PR](https://github.com/livepeer/runner-app-examples/compare) that adds a row. To make your repo easy to find, follow the community convention (the template's README walks through it):
-
-- Name the repo `<app>-livepeer-runner` (e.g. `comfyui-livepeer-runner`).
-- Add the `livepeer-runner` GitHub topic.
-- Mention Livepeer in the repo description.
-
 ## Running the examples
 
 Each example is self-contained and its README has the run commands. Everything below is the **shared setup** they all build on — the examples spin up a local orchestrator (and, on-chain, a signer) via the compose files here, so you set this up once, not per example.
@@ -115,7 +113,7 @@ Each example is self-contained and its README has the run commands. Everything b
 
 - **Docker** for the end-to-end demos, so there is nothing to build. They run the `livepeer/go-livepeer:v0.9.1` release image.
 - **Python 3.12+** and [`uv`](https://docs.astral.sh/uv/) for the client.
-- The **[`livepeer-gateway` SDK](https://pypi.org/project/livepeer-gateway/)** (`uv run` installs it for you from each app's `pyproject.toml`):
+- The **[`livepeer-gateway` SDK](https://pypi.org/project/livepeer-gateway/)**. `uv run` installs it for you from each app's `pyproject.toml`, so you only need this to install it yourself:
 
   ```sh
   pip install "livepeer-gateway>=1.0.0"
@@ -152,6 +150,24 @@ Each entry lists its `runners` with an `app`, `version`, capacity, and `price_in
 
 - Apps bind to `127.0.0.1` by default (safe for local runs). In a container the compose files pass `--host=0.0.0.0` so the orchestrator can reach the app.
 - Orchestrators serve a self-signed TLS cert; the SDK skips verification.
+
+## External examples
+
+Apps that integrate the live runner and live in their own repos — production deployments and standalone examples alike. This table is links-only: the code, CI, and support stay with the author.
+
+| Project                                                                                               | What it is                                                                               | Transport           |
+| ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------- |
+| [daydreamlive/scope](https://github.com/daydreamlive/scope/tree/ja/runner)                            | Real-time AI video with downloadable LoRA models                                         | WebSocket + trickle |
+| [livepeer/api-proxy](https://github.com/livepeer/api-proxy)                                           | Attach several API endpoints dynamically — key storage and request stats for operators   | HTTP                |
+| [Gideonjon/vllm-realtime-livepeer-runner](https://github.com/Gideonjon/vllm-realtime-livepeer-runner) | Real-time speech-to-text — trickle audio in, WebSocket transcript out, with live metrics | WebSocket + trickle |
+
+**Building one?** Start from [**template-livepeer-runner**](https://github.com/livepeer/template-livepeer-runner) — a working app, client, and compose setup you can run in one command, offchain or on-chain. The examples here are not copyable as-is: each one's `compose.yml` pulls the orchestrator from a shared file one directory up.
+
+Then [open a PR](https://github.com/livepeer/runner-app-examples/compare) that adds a row. To make your repo easy to find, follow the community convention (the template's README walks through it):
+
+- Name the repo `<app>-livepeer-runner` (e.g. `comfyui-livepeer-runner`).
+- Add the `livepeer-runner` GitHub topic.
+- Mention Livepeer in the repo description.
 
 ## Contributing
 

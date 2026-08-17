@@ -2,7 +2,7 @@
 
 Example **apps that run on** the Livepeer **live runner** — [go-livepeer](https://github.com/livepeer/go-livepeer)'s new way to run any app on the network, shipping in mainline since [v0.9.0](https://github.com/livepeer/go-livepeer/releases/tag/v0.9.0). Each app is a plain HTTP / WebSocket / video service: an orchestrator running the live runner **hosts** it, and a client **calls** it through the orchestrator with the [livepeer-gateway](https://github.com/livepeer/livepeer-python-gateway) **SDK**.
 
-The point is to **swap the compute without changing your app — permissionlessly, no lock-in**. Your app stays a plain service with little or no Livepeer-specific code, so you're never tied to us. And the network is permissionless: anyone can run or extend it, no one gatekeeps what you deploy, and no single party can take your app down. Write the app once; **move the compute freely**.
+The point is to **swap the compute without changing your app: permissionlessly, no lock-in**. Your app stays a plain service with little or no Livepeer-specific code, so you're never tied to us. And the network is permissionless: anyone can run or extend it, no one gatekeeps what you deploy, and no single party can take your app down. Write the app once; **move the compute freely**.
 
 ## Quick start
 
@@ -17,7 +17,7 @@ docker compose down
 
 ## How it works
 
-Your app is a plain service that clients reach _through_ the orchestrator — the SDK handles discovery / session / payment, and, on-chain, a remote signer settles it. The client never talks to your app directly.
+Your app is a plain service that clients reach _through_ the orchestrator. The SDK handles discovery / session / payment, and, on-chain, a remote signer settles it. The client never talks to your app directly.
 
 ```mermaid
 flowchart LR
@@ -54,7 +54,7 @@ Need a transport that isn't here? [Open an issue](https://github.com/livepeer/ru
 | [`vllm`](./vllm)                                     | Drop-in OpenAI API; the client stays unmodified                                       | static       | single-shot | HTTP + SSE        | hour    |
 | [`realtime-transcription`](./realtime-transcription) | Audio up, transcripts back, on one socket                                             | dynamic      | persistent  | WebSocket         | hour    |
 
-Start with `hello-world` (the smallest end-to-end path); the others each layer on one new idea. More will follow, including a full example that exercises every feature. Each is self-contained and runs **offchain** (free, no wallet); most also run **on-chain** (paid) — see each README.
+Start with `hello-world` (the smallest end-to-end path); the others each layer on one new idea. More will follow, including a full example that exercises every feature. Each is self-contained and runs **offchain** (free, no wallet); most also run **on-chain** (paid): see each README.
 
 This set stays **minimal and curated**: it covers each value of the axes above (registration, mode, transport, pricing), not one example per app. New examples land here only when they fill a gap in that table — apps built on the runner belong in their own repos, listed under [External examples](#external-examples).
 
@@ -72,7 +72,7 @@ Up to 1 KB of app-controlled UTF-8 for detail the protocol doesn't model, echoed
 
 </details>
 
-The arrow flips — dynamic, the app announces itself; static, the orchestrator is told about a passive app:
+The arrow flips: dynamic, the app announces itself; static, the orchestrator is told about a passive app:
 
 ```mermaid
 flowchart LR
@@ -88,7 +88,7 @@ flowchart LR
 
 ## Runner modes
 
-Chosen _at_ registration (above); **defaults to `persistent`** — set on both `register_runner(...)` and in `runners.json`. The examples set it explicitly.
+Chosen _at_ registration (above); **defaults to `persistent`**, set on both `register_runner(...)` and in `runners.json`. The examples set it explicitly.
 
 - **Persistent** — a held-open session the client reserves and releases, billed per second of wall-clock (or once, with fixed pricing). Best for realtime / streaming. (`echo`, `realtime-transcription`)
 - **Single-shot** — one request in, one response out; the orchestrator reserves a session per call and releases it when the response returns, so the client manages no session at all. Best for batch / request-response. With metered pricing the call pays for as long as it runs, so the work need not be short. (`hello-world`, `tiles`, `api-proxy`, `vllm`)
@@ -100,11 +100,11 @@ The client side depends on the runner's mode:
 - **Single-shot** — **discover → call**: find the app via `runner_selector`, then one `call_runner`. The orchestrator reserves a session for the call and releases it when the response returns; on the paid path `call_runner` answers the 402 payment challenge inline. (`hello-world`, `tiles`, `api-proxy`, `vllm`)
 - **Persistent** — **discover → reserve → call → release**: reserve a session (`reserve_session`), call it — `call_runner`, streamed frames, or a WebSocket, depending on transport — then release it (`stop_runner_session`), which settles payment on-chain. (`echo`, `realtime-transcription`)
 
-Each example's `client.py` shows its exact calls — grep `# Livepeer:` to find them.
+Each example's `client.py` shows its exact calls: grep `# Livepeer:` to find them.
 
 ## Shared setup
 
-Each example is self-contained and its README has the run commands. Everything below is the setup they all build on — the examples spin up a local orchestrator (and, on-chain, a signer) via the compose files here, so you set this up once, not per example.
+Each example is self-contained and its README has the run commands. Everything below is the setup they all build on: the examples spin up a local orchestrator (and, on-chain, a signer) via the compose files here, so you set this up once, not per example.
 
 ### Prerequisites
 
@@ -141,7 +141,7 @@ Before running a client, confirm the orchestrator actually advertises your runne
 curl -sk https://localhost:8935/discovery | jq
 ```
 
-Each entry lists its `runners` with an `app`, `version`, capacity, and `price_info`. The orchestrator republishes your USD price converted to wei — `price` in wei with `currency: wei` and `unit: seconds` (`720p-pixel-seconds` for per-pixel video, `fixed` for once-per-session pricing). Check that your app appears and the price is non-zero.
+Each entry lists its `runners` with an `app`, `version`, capacity, and `price_info`. The orchestrator republishes your USD price converted to wei: `price` in wei with `currency: wei` and `unit: seconds` (`720p-pixel-seconds` for per-pixel video, `fixed` for once-per-session pricing). Check that your app appears and the price is non-zero.
 
 ### Conventions
 
@@ -150,7 +150,7 @@ Each entry lists its `runners` with an `app`, `version`, capacity, and `price_in
 
 ## External examples
 
-Apps that integrate the live runner and live in their own repos — production deployments and standalone examples alike. This table is links-only: the code, CI, and support stay with the author.
+Apps that integrate the live runner and live in their own repos, production deployments and standalone examples alike. This table is links-only: the code, CI, and support stay with the author.
 
 | Project                                                                                               | What it is                                                                               | Transport           |
 | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------- |
@@ -158,7 +158,7 @@ Apps that integrate the live runner and live in their own repos — production d
 | [livepeer/api-proxy](https://github.com/livepeer/api-proxy)                                           | Attach several API endpoints dynamically — key storage and request stats for operators   | HTTP                |
 | [Gideonjon/vllm-realtime-livepeer-runner](https://github.com/Gideonjon/vllm-realtime-livepeer-runner) | Real-time speech-to-text — trickle audio in, WebSocket transcript out, with live metrics | WebSocket + trickle |
 
-**Building one?** Start from [**template-livepeer-runner**](https://github.com/livepeer/template-livepeer-runner) — a working app, client, and compose setup you can run in one command, offchain or on-chain. The examples here are not copyable as-is: each one's `compose.yml` pulls the orchestrator from a shared file one directory up.
+**Building one?** Start from [**template-livepeer-runner**](https://github.com/livepeer/template-livepeer-runner): a working app, client, and compose setup you can run in one command, offchain or on-chain. The examples here are not copyable as-is: each one's `compose.yml` pulls the orchestrator from a shared file one directory up.
 
 Then [open a PR](https://github.com/livepeer/runner-app-examples/compare) that adds a row. To make your repo easy to find, follow the community convention (the template's README walks through it):
 
@@ -168,4 +168,4 @@ Then [open a PR](https://github.com/livepeer/runner-app-examples/compare) that a
 
 ## Contributing
 
-Issues and PRs welcome — see [CONTRIBUTING.md](./CONTRIBUTING.md).
+Issues and PRs welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md).

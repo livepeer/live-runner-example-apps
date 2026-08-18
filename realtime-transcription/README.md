@@ -61,7 +61,7 @@ ffmpeg -f alsa -i default -ar 16000 -ac 1 -f s16le - \
 ## Run offchain (free)
 
 > [!TIP]
-> Built locally by the compose file below, and hosted at [`rickstaa/runner-example-realtime-transcription`](https://hub.docker.com/r/rickstaa/runner-example-realtime-transcription) — tags in the [repo README](../README.md#images).
+> Built locally by the compose file below, and published at [`ghcr.io/livepeer/runner-example-realtime-transcription`](https://github.com/livepeer/runner-app-examples/pkgs/container/runner-example-realtime-transcription) — public, so `docker pull` needs no login; tags in the [repo README](../README.md#images).
 
 ```sh
 docker compose up -d --build      # first run downloads the whisper model

@@ -127,10 +127,17 @@ The orchestrator and signer services are defined once at the repo root and pulle
 
 ### Images
 
-Each example ships a `Dockerfile` and a `compose.yml` that builds it locally. Those with a `Dockerfile` are also hosted on Docker Hub as `runner-example-<name>` (`linux/amd64`), linked from the example's own README. Tags: `latest` (current `main`), `stable` (latest `v*` release), `1.2` / `1.2.3`, `sha-<short>`.
+Each example ships a `Dockerfile` and a `compose.yml` that builds it locally. Those with a `Dockerfile` are also published to the GitHub Container Registry as `ghcr.io/livepeer/runner-example-<name>` (`linux/amd64`), linked from the example's own README. Tags: `latest` (current `main`), `stable` (latest `v*` release), `1.2` / `1.2.3`, `sha-<short>`.
 
-> [!NOTE]
-> The images publish under `rickstaa/` until they move to the `livepeer` org ([#6](https://github.com/livepeer/runner-app-examples/issues/6)).
+The packages are public, so pulling one needs no account and no login:
+
+```sh
+docker pull ghcr.io/livepeer/runner-example-hello-world:latest
+```
+
+That is the whole reason they are published: an operator can run an example without building it. The compose files still build locally, so nothing here depends on the registry being reachable.
+
+> [!NOTE] > **Docker Hub is not a second home for these.** GHCR publishes with the built-in `GITHUB_TOKEN`, so there is no credential to store or rotate, and public packages have no anonymous pull limit. Docker Hub `livepeer/` is a product namespace and these are examples, so they stay out of it. Images published under `rickstaa/` before this moved are frozen and should not be used.
 
 ### On-chain (paid) setup
 

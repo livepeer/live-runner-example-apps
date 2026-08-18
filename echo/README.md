@@ -33,6 +33,9 @@ Two things follow from that, and they are what this example exists to show:
 
 ## Run offchain (free)
 
+> [!TIP]
+> Built locally by the compose file below, and hosted at [`rickstaa/runner-example-echo`](https://hub.docker.com/r/rickstaa/runner-example-echo) — tags in the [repo README](../README.md#images).
+
 Start the stack and confirm the runner registered:
 
 ```sh

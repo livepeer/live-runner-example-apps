@@ -19,6 +19,9 @@ The app is **dynamically registered**: it self-registers with the orchestrator v
 
 ## Run offchain (free)
 
+> [!TIP]
+> Built locally by the compose file below, and hosted at [`rickstaa/runner-example-hello-world`](https://hub.docker.com/r/rickstaa/runner-example-hello-world) — tags in the [repo README](../README.md#images).
+
 ```sh
 docker compose up -d --build
 curl -sk https://localhost:8935/discovery | jq '.[].runners[].app'   # confirm livepeer-example/hello-world registered

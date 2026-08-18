@@ -1,19 +1,16 @@
-# The whole runner: a stock nginx forwards each call to a pinned Hugging Face
-# model URL and injects the operator's token. The orchestrator health-polls
-# /health and reverse-proxies caller requests to <model>/proxy. Only HF_TOKEN is
-# substituted from the environment, by the nginx image's template mechanism; the
-# models are pinned here, in the same file as the routes that serve them.
+# The whole runner: a stock nginx pins one Hugging Face model per route and
+# injects the operator's token. HF_TOKEN is the only value substituted from the
+# environment, by the nginx image's template mechanism.
 #
-# One process, one route per capability. runners.json points each app id at its
-# own path (http://app:8989/sd3), and the orchestrator preserves that path when
-# it forwards, so the two registrations land on different location blocks. A
-# capability is a registration, not a container.
+# runners.json points each app id at its own path (http://app:8989/sd3), which
+# the orchestrator preserves when forwarding, so each lands on its own block.
 server {
     listen 8989;
 
-    # One health endpoint for both capabilities: `return 200` only ever reported
-    # that nginx is up, never that an upstream model or the token is still good,
-    # so a per-capability copy would claim a precision it does not have.
+    # One endpoint for both capabilities. `return 200` only reports that nginx is
+    # up, never that a model or the token is good. Hugging Face exposes no
+    # readiness endpoint, only metadata, and the orchestrator polls this every 5s
+    # with a 3s timeout, so a real upstream check does not belong here.
     location = /health {
         default_type application/json;
         return 200 '{"status":"ok"}';
@@ -36,8 +33,7 @@ server {
         proxy_read_timeout 120s;  # a hosted diffusion model can take tens of seconds
     }
 
-    # The same block against a different model. Offering one more capability is
-    # one more location here plus one more runners.json entry.
+    # One more capability is one more location here plus one runners.json entry.
     location = /flux/proxy {
         limit_except POST { deny all; }
         set $args '';

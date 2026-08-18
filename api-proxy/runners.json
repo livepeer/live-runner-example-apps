@@ -6,7 +6,7 @@
       "runner_url": "http://app:8989/sd3",
       "health_url": "http://app:8989/health",
       "mode": "single-shot",
-      "capacity": 1,
+      "capacity": 4,
       "price_info": { "price": 0.0001, "unit": "fixed" }
     },
     {
@@ -15,7 +15,7 @@
       "runner_url": "http://app:8989/flux",
       "health_url": "http://app:8989/health",
       "mode": "single-shot",
-      "capacity": 1,
+      "capacity": 4,
       "price_info": { "price": 0.00004, "unit": "fixed" }
     }
   ]

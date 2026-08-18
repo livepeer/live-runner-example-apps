@@ -1,8 +1,8 @@
 # The whole runner: a stock nginx forwards each call to a pinned Hugging Face
 # model URL and injects the operator's token. The orchestrator health-polls
-# /health and reverse-proxies caller requests to <model>/proxy. HF_TOKEN and the
-# MODEL_* vars are substituted from the environment by the nginx image's
-# template mechanism.
+# /health and reverse-proxies caller requests to <model>/proxy. Only HF_TOKEN is
+# substituted from the environment, by the nginx image's template mechanism; the
+# models are pinned here, in the same file as the routes that serve them.
 #
 # One process, one route per capability. runners.json points each app id at its
 # own path (http://app:8989/sd3), and the orchestrator preserves that path when
@@ -26,7 +26,7 @@ server {
     location = /sd3/proxy {
         limit_except POST { deny all; }
         set $args '';
-        proxy_pass https://router.huggingface.co/hf-inference/models/${MODEL_SD3};
+        proxy_pass https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-3-medium-diffusers;
         proxy_set_header Authorization "Bearer ${HF_TOKEN}";
         # Hugging Face content-negotiates: with the SDK's Accept:
         # application/json it answers with a base64 PNG in a JSON string
@@ -41,7 +41,7 @@ server {
     location = /flux/proxy {
         limit_except POST { deny all; }
         set $args '';
-        proxy_pass https://router.huggingface.co/hf-inference/models/${MODEL_FLUX};
+        proxy_pass https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell;
         proxy_set_header Authorization "Bearer ${HF_TOKEN}";
         proxy_set_header Accept "image/jpeg";
         proxy_ssl_server_name on;

@@ -35,11 +35,5 @@ services:
     environment:
       # The operator-held upstream credential (huggingface.co → settings → tokens).
       - HF_TOKEN=${HF_TOKEN:?set HF_TOKEN in .env (copy .env.example)}
-      # One model per route in nginx.conf.template. Swap one here and rename its
-      # app id in runners.json to match (the app id is what callers discover).
-      - MODEL_SD3=stabilityai/stable-diffusion-3-medium-diffusers
-      # Faster and cheaper than sd3 — which is why it is a separate capability
-      # at a separate price rather than a flag on the first one.
-      - MODEL_FLUX=black-forest-labs/FLUX.1-schnell
     volumes:
       - ./nginx.conf.template:/etc/nginx/templates/default.conf.template:ro

@@ -5,6 +5,10 @@ The request body is the Hugging Face text-to-image payload as-is
 ({"inputs": "<prompt>"}); the runner forwards it verbatim and the image comes
 back as raw JPEG bytes in `result.content`.
 
+The operator offers two models, so `--app` picks which one to call. Discovery
+matches app ids exactly, which is the whole reason each model has its own: it is
+what a caller selects and pays for.
+
 Livepeer integration (grep `# Livepeer:`):
   1. runner_selector() — discover orchestrators advertising the app
   2. call_runner()     — call the app through the orchestrator; a non-JSON response
@@ -25,7 +29,8 @@ from livepeer_gateway.live_runner import call_runner
 from livepeer_gateway.selection import runner_selector
 
 DEFAULT_DISCOVERY = "https://localhost:8935/discovery"
-APP_ID = "livepeer-example/stable-diffusion-3-medium"
+DEFAULT_APP = "livepeer-example/stable-diffusion-3-medium"
+FLUX_APP = "livepeer-example/flux-1-schnell"  # the other one this demo offers
 DEFAULT_OUTPUT = "api-proxy-out.jpg"
 
 log = logging.getLogger("api-proxy-client")
@@ -37,6 +42,11 @@ def _parse_args() -> argparse.Namespace:
         "--prompt", default="a watercolor painting of a llama writing code"
     )
     parser.add_argument("--output", default=DEFAULT_OUTPUT, help="output image path")
+    parser.add_argument(
+        "--app",
+        default=DEFAULT_APP,
+        help=f"app id to call; this demo also offers {FLUX_APP}",
+    )
     parser.add_argument("--discovery", default=DEFAULT_DISCOVERY)
     parser.add_argument(
         "--signer", default="", help="Remote signer base URL (on-chain/paid path)."
@@ -52,10 +62,10 @@ async def main() -> None:
     try:
         cursor = await runner_selector(  # Livepeer: 1
             discovery_url=args.discovery,  # omit if the signer does discovery itself
-            app=APP_ID,
+            app=args.app,
         )
         runner = cursor.candidates[0]
-        log.info("app_url=%s", runner.url)
+        log.info("app=%s app_url=%s", args.app, runner.url)
 
         result = await call_runner(  # Livepeer: 2
             runner=runner,  # discovery metadata tells call_runner the price unit

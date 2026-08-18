@@ -1,10 +1,16 @@
-# The whole runner: a stock nginx forwards each call to one pinned Hugging Face
-# model URL and injects the operator's token. The orchestrator health-polls
-# /health and reverse-proxies caller requests to /proxy. HF_TOKEN and MODEL are
-# substituted from the environment by the nginx image's template mechanism.
+# The whole runner: a stock nginx pins one Hugging Face model per route and
+# injects the operator's token. HF_TOKEN is the only value substituted from the
+# environment, by the nginx image's template mechanism.
+#
+# runners.json points each app id at its own path (http://app:8989/sd3), which
+# the orchestrator preserves when forwarding, so each lands on its own block.
 server {
     listen 8989;
 
+    # One endpoint for both capabilities. `return 200` only reports that nginx is
+    # up, never that a model or the token is good. Hugging Face exposes no
+    # readiness endpoint, only metadata, and the orchestrator polls this every 5s
+    # with a 3s timeout, so a real upstream check does not belong here.
     location = /health {
         default_type application/json;
         return 200 '{"status":"ok"}';
@@ -14,10 +20,10 @@ server {
     # be spent on exactly this model, callers choose nothing but the payload.
     # Method and query string are part of "nothing": nginx would forward both
     # upstream as the caller sent them, so pin the method and drop the args.
-    location = /proxy {
+    location = /sd3/proxy {
         limit_except POST { deny all; }
         set $args '';
-        proxy_pass https://router.huggingface.co/hf-inference/models/${MODEL};
+        proxy_pass https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-3-medium-diffusers;
         proxy_set_header Authorization "Bearer ${HF_TOKEN}";
         # Hugging Face content-negotiates: with the SDK's Accept:
         # application/json it answers with a base64 PNG in a JSON string
@@ -25,5 +31,16 @@ server {
         proxy_set_header Accept "image/jpeg";
         proxy_ssl_server_name on;
         proxy_read_timeout 120s;  # a hosted diffusion model can take tens of seconds
+    }
+
+    # One more capability is one more location here plus one runners.json entry.
+    location = /flux/proxy {
+        limit_except POST { deny all; }
+        set $args '';
+        proxy_pass https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell;
+        proxy_set_header Authorization "Bearer ${HF_TOKEN}";
+        proxy_set_header Accept "image/jpeg";
+        proxy_ssl_server_name on;
+        proxy_read_timeout 120s;
     }
 }

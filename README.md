@@ -125,6 +125,13 @@ The orchestrator and signer services are defined once at the repo root and pulle
 - `compose.orchestrator.yml` — the offchain orchestrator (`-useLiveRunners`).
 - `compose.onchain.yml` — adds a remote signer and re-points the orchestrator on-chain.
 
+### Images
+
+Each example ships a `Dockerfile` and a `compose.yml` that builds it locally. Those with a `Dockerfile` are also hosted on Docker Hub as `runner-example-<name>` (`linux/amd64`), linked from the example's own README. Tags: `latest` (current `main`), `stable` (latest `v*` release), `1.2` / `1.2.3`, `sha-<short>`.
+
+> [!NOTE]
+> The images publish under `rickstaa/` until they move to the `livepeer` org ([#6](https://github.com/livepeer/runner-app-examples/issues/6)).
+
 ### On-chain (paid) setup
 
 On-chain runs add a **remote signer** that holds the payer wallet and mints [probabilistic micropayment](https://medium.com/livepeer-blog/a-primer-on-livepeers-probabilistic-micropayments-e16788b29331) tickets; the orchestrator redeems the winning ones. Shared across examples:

@@ -19,7 +19,7 @@ The apps are attached as **static runners**: the orchestrator reads [runners.jso
 
 **A capability is a registration, not a container.** One nginx serves both: each `runners.json` entry points its app id at its own path (`http://app:8989/sd3`), and the orchestrator preserves that path when it forwards, so the two registrations land on different `location` blocks with different pinned models and different prices. `--app` on the client picks which one to call.
 
-The shared `/health` is deliberate. `return 200` only ever reported that nginx is up, never that an upstream model or the token is still good, so a copy per capability would claim a precision it does not have.
+The shared `/health` is deliberate: it reports that nginx is up and nothing more. [nginx.conf.template](nginx.conf.template) says why a real upstream check does not belong there.
 
 ## Offering an API as a capability — what this shows
 
@@ -35,9 +35,7 @@ Everything is operator-side config. `runners.json` names each capability and set
 
 Both capabilities here are fixed at deploy time: two `location` blocks and two `runners.json` entries, changed by editing config and restarting. That is the whole point of a **static** runner, and it is the right trade when the offering is stable.
 
-Registration can also be **dynamic**. [livepeer/api-proxy](https://github.com/livepeer/api-proxy) is the same one-process-many-endpoints shape, except endpoints are added at runtime with a CLI or a dashboard — one `register_runner` each, each its own priced capability, with no orchestrator config to touch and no restart. It also stores the upstream keys encrypted and reports per-endpoint request stats, which is what an operator running more than a handful of these actually needs.
-
-Same idea, opposite ends of the same axis: pin the routes and read the config, or enable endpoints as you go.
+Registration can also be **dynamic**. [livepeer/api-proxy](https://github.com/livepeer/api-proxy) is the same one-process-many-endpoints shape, except endpoints are added at runtime with a CLI or a dashboard: one `register_runner` each, each its own priced capability, with no orchestrator config to touch and no restart. It also stores the upstream keys encrypted and reports per-endpoint request stats, which is what an operator running more than a handful of these actually needs.
 
 ## Run offchain (free)
 

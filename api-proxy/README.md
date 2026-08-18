@@ -66,4 +66,4 @@ uv run client.py --prompt "a watercolor painting of a llama writing code" \
 docker compose -f compose.yml -f compose.onchain.yml down
 ```
 
-Each call is one paid single-shot session — the orchestrator reserves it, takes one fixed payment, and releases it when the response returns. Call the cheaper capability with `--app livepeer-example/flux-1-schnell` and the payment is smaller, which is the whole reason each model is its own app. The signer's `MAX_PRICE_PER_UNIT` is a single cap across capabilities, so it has to clear the **highest** price in `runners.json`.
+Each call is one paid single-shot session: the orchestrator reserves it, takes one fixed payment, and releases it when the response returns. `--app` picks which price you pay. The signer's `MAX_PRICE_PER_UNIT` is one cap across both capabilities, so it has to clear the **highest** price in `runners.json`.

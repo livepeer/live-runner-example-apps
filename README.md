@@ -135,9 +135,8 @@ The packages are public, so pulling one needs no account and no login:
 docker pull ghcr.io/livepeer/runner-example-hello-world:latest
 ```
 
-That is the whole reason they are published: an operator can run an example without building it. The compose files still build locally, so nothing here depends on the registry being reachable.
-
-> [!NOTE] > **Docker Hub is not a second home for these.** GHCR publishes with the built-in `GITHUB_TOKEN`, so there is no credential to store or rotate, and public packages have no anonymous pull limit. Docker Hub `livepeer/` is a product namespace and these are examples, so they stay out of it. Images published under `rickstaa/` before this moved are frozen and should not be used.
+> [!NOTE]
+> The images previously published under `rickstaa/` on Docker Hub are frozen; use the GHCR ones.
 
 ### On-chain (paid) setup
 

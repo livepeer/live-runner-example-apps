@@ -129,11 +129,14 @@ The orchestrator and signer services are defined once at the repo root and pulle
 
 Each example ships a `Dockerfile` and a `compose.yml` that builds it locally. Those with a `Dockerfile` are also published to the GitHub Container Registry as `ghcr.io/livepeer/runner-example-<name>` (`linux/amd64`), linked from the example's own README. Tags: `latest` (current `main`), `stable` (latest `v*` release), `1.2` / `1.2.3`, `sha-<short>`.
 
-The packages are public, so pulling one needs no account and no login:
+The packages are public, so pulling needs no account and no login. Each example with a `Dockerfile` ships a `compose.image.yml` overlay that swaps the local build for the published image:
 
 ```sh
-docker pull ghcr.io/livepeer/runner-example-hello-world:latest
+cd hello-world
+docker compose -f compose.yml -f compose.image.yml up -d
 ```
+
+The base `compose.yml` always builds from source, so the registry is reached only when you ask for it by adding the overlay. It stacks with the on-chain one (`-f compose.yml -f compose.onchain.yml -f compose.image.yml`).
 
 > [!NOTE]
 > The images previously published under `rickstaa/` on Docker Hub are frozen; use the GHCR ones.

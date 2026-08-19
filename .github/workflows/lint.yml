@@ -32,5 +32,9 @@ jobs:
             example=${dir%/}
             [ -f "$example/compose.yml" ] || continue
             docker compose -f "$example/compose.yml" config --quiet || status=1
+            if [ -f "$example/compose.image.yml" ]; then
+              docker compose -f "$example/compose.yml" \
+                -f "$example/compose.image.yml" config --quiet || status=1
+            fi
           done
           exit $status

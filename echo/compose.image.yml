@@ -1,0 +1,12 @@
+# Run the published image instead of building. Layer it on the offchain base:
+#   docker compose -f compose.yml -f compose.image.yml up -d
+#
+# The base file always builds from source, so this overlay is the only way to
+# reach the registry; `pull_policy: always` keeps a stale local copy from
+# shadowing the published one. Stacks with the on-chain overlay too:
+#   docker compose -f compose.yml -f compose.onchain.yml -f compose.image.yml up -d
+
+services:
+  app:
+    image: ghcr.io/livepeer/runner-example-echo:latest
+    pull_policy: always

@@ -20,7 +20,7 @@ The app is **dynamically registered**: it self-registers with the orchestrator v
 ## Run offchain (free)
 
 > [!TIP]
-> Built locally by the compose file below, and published at [`ghcr.io/livepeer/runner-example-hello-world`](https://github.com/livepeer/runner-app-examples/pkgs/container/runner-example-hello-world) — public, so `docker pull` needs no login; tags in the [repo README](../README.md#images).
+> Built locally by the compose file below, or run the published [`ghcr.io/livepeer/runner-example-hello-world`](https://github.com/livepeer/runner-app-examples/pkgs/container/runner-example-hello-world) instead with `-f compose.yml -f compose.image.yml` — the package is public, so no login; tags in the [repo README](../README.md#images).
 
 ```sh
 docker compose up -d --build

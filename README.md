@@ -136,7 +136,7 @@ cd hello-world
 docker compose -f compose.yml -f compose.image.yml up -d
 ```
 
-The base `compose.yml` always builds from source, so the registry is reached only when you ask for it by adding the overlay. It stacks with the on-chain one (`-f compose.yml -f compose.onchain.yml -f compose.image.yml`).
+The base `compose.yml` names no image, so it never reaches a registry: it builds, then reuses that local build until you pass `--build`. The overlay is the only path to the published image, and it stacks with the on-chain one (`-f compose.yml -f compose.onchain.yml -f compose.image.yml`).
 
 ### On-chain (paid) setup
 

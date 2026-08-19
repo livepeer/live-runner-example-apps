@@ -14,8 +14,7 @@ services:
       service: orchestrator
 
   app:
-    # `up` always builds, so an edit is never silently ignored and no registry
-    # is contacted. `up --pull always` runs the published image instead.
+    # `up` always builds; `--pull always` runs the published image instead.
     image: ghcr.io/livepeer/runner-example-realtime-transcription:latest
     pull_policy: build
     build: .

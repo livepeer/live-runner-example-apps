@@ -13,6 +13,13 @@ services:
       service: orchestrator
 
   app:
+    # Builds from source by default, rebuilding on every `up` so an edit is
+    # never silently ignored (the layer cache keeps that cheap). To run the
+    # published image instead of building:
+    #   APP_IMAGE=ghcr.io/livepeer/runner-example-echo:latest \
+    #     APP_PULL_POLICY=always docker compose up -d
+    image: ${APP_IMAGE:-runner-example-echo:local}
+    pull_policy: ${APP_PULL_POLICY:-build}
     build: .
     container_name: example_apps_echo
     # Wait for the orchestrator's healthcheck so registration doesn't race its boot.

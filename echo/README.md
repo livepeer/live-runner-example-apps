@@ -34,7 +34,7 @@ Two things follow from that, and they are what this example exists to show:
 ## Run offchain (free)
 
 > [!TIP]
-> Built locally by the compose file below, or run the published [`ghcr.io/livepeer/runner-example-echo`](https://github.com/livepeer/runner-app-examples/pkgs/container/runner-example-echo) instead with `-f compose.yml -f compose.image.yml` — the package is public, so no login; tags in the [repo README](../README.md#images).
+> Built locally by the compose file below, or run the published [`ghcr.io/livepeer/runner-example-echo`](https://github.com/livepeer/runner-app-examples/pkgs/container/runner-example-echo) instead by setting `APP_IMAGE` and `APP_PULL_POLICY=always` — the package is public, so no login; see [Images](../README.md#images).
 
 Start the stack and confirm the runner registered:
 

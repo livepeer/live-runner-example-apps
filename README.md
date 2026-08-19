@@ -129,14 +129,15 @@ The orchestrator and signer services are defined once at the repo root and pulle
 
 Each example ships a `Dockerfile` and a `compose.yml` that builds it locally. Those with a `Dockerfile` are also published to the GitHub Container Registry as `ghcr.io/livepeer/runner-example-<name>` (`linux/amd64`), linked from the example's own README. Tags: `latest` (current `main`), `stable` (latest `v*` release), `1.2` / `1.2.3`, `sha-<short>`.
 
-The packages are public, so pulling needs no account and no login. Each example with a `Dockerfile` ships a `compose.image.yml` overlay that swaps the local build for the published image:
+The packages are public, so pulling needs no account and no login. Every `compose.yml` builds from source by default; set two variables to run the published image instead, with no file to edit:
 
 ```sh
 cd hello-world
-docker compose -f compose.yml -f compose.image.yml up -d
+APP_IMAGE=ghcr.io/livepeer/runner-example-hello-world:latest \
+  APP_PULL_POLICY=always docker compose up -d
 ```
 
-The base `compose.yml` names no image, so it never reaches a registry: it builds, then reuses that local build until you pass `--build`. The overlay is the only path to the published image, and it stacks with the on-chain one (`-f compose.yml -f compose.onchain.yml -f compose.image.yml`).
+Unset, the image name is local-only and the registry is never contacted. This works with the on-chain overlay too, since it only changes how the app image is resolved.
 
 ### On-chain (paid) setup
 

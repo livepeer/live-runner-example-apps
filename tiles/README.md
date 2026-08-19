@@ -34,7 +34,7 @@ The output image is identical either way. **Capacity changes throughput, not the
 ## Run offchain (free)
 
 > [!TIP]
-> Built locally by the compose file below, and hosted at [`rickstaa/runner-example-tiles`](https://hub.docker.com/r/rickstaa/runner-example-tiles) — tags in the [repo README](../README.md#images).
+> Built locally by the compose file below, or run the published [`ghcr.io/livepeer/runner-example-tiles`](https://github.com/livepeer/runner-app-examples/pkgs/container/runner-example-tiles) with `docker compose up -d --pull always` — see [Images](../README.md#images).
 
 ```sh
 CAPACITY=1 docker compose up -d --build

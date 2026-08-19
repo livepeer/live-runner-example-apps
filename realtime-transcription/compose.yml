@@ -14,6 +14,9 @@ services:
       service: orchestrator
 
   app:
+    # `up` always builds; `--pull always` runs the published image instead.
+    image: ghcr.io/livepeer/runner-example-realtime-transcription:latest
+    pull_policy: build
     build: .
     container_name: example_apps_realtime_transcription
     # Wait for the orchestrator's healthcheck so registration doesn't race its boot.

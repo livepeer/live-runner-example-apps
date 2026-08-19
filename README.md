@@ -127,10 +127,13 @@ The orchestrator and signer services are defined once at the repo root and pulle
 
 ### Images
 
-Each example ships a `Dockerfile` and a `compose.yml` that builds it locally. Those with a `Dockerfile` are also hosted on Docker Hub as `runner-example-<name>` (`linux/amd64`), linked from the example's own README. Tags: `latest` (current `main`), `stable` (latest `v*` release), `1.2` / `1.2.3`, `sha-<short>`.
+Each example ships a `Dockerfile` and a `compose.yml` that builds it locally. Those with a `Dockerfile` are also published to the GitHub Container Registry as `ghcr.io/livepeer/runner-example-<name>` (`linux/amd64`), linked from the example's own README. Tags: `latest` (current `main`), `stable` (latest `v*` release), `1.2` / `1.2.3`, `sha-<short>`.
 
-> [!NOTE]
-> The images publish under `rickstaa/` until they move to the `livepeer` org ([#6](https://github.com/livepeer/runner-app-examples/issues/6)).
+The packages are public, so no login is needed. `compose.yml` always builds; one flag runs the published image instead:
+
+```sh
+docker compose up -d --pull always
+```
 
 ### On-chain (paid) setup
 

@@ -13,10 +13,8 @@ services:
       service: orchestrator
 
   app:
-    # `pull_policy: build` means `up` always builds and never contacts a
-    # registry, so an edit is never silently ignored (the layer cache keeps the
-    # rebuild near-instant). `up --pull always` overrides it to run the
-    # published image instead.
+    # `up` always builds, so an edit is never silently ignored and no registry
+    # is contacted. `up --pull always` runs the published image instead.
     image: ghcr.io/livepeer/runner-example-hello-world:latest
     pull_policy: build
     build: .

@@ -138,9 +138,6 @@ docker compose -f compose.yml -f compose.image.yml up -d
 
 The base `compose.yml` always builds from source, so the registry is reached only when you ask for it by adding the overlay. It stacks with the on-chain one (`-f compose.yml -f compose.onchain.yml -f compose.image.yml`).
 
-> [!NOTE]
-> The images previously published under `rickstaa/` on Docker Hub are frozen; use the GHCR ones.
-
 ### On-chain (paid) setup
 
 On-chain runs add a **remote signer** that holds the payer wallet and mints [probabilistic micropayment](https://medium.com/livepeer-blog/a-primer-on-livepeers-probabilistic-micropayments-e16788b29331) tickets; the orchestrator redeems the winning ones. Shared across examples:

@@ -1,9 +1,10 @@
 # Run the published image instead of building. Layer it on the offchain base:
 #   docker compose -f compose.yml -f compose.image.yml up -d
 #
-# The base file always builds from source, so this overlay is the only way to
-# reach the registry; `pull_policy: always` keeps a stale local copy from
-# shadowing the published one. Stacks with the on-chain overlay too:
+# The base file names no image, so it never reaches a registry: it builds, then
+# reuses that local build until you pass --build. This overlay is the only path
+# to the published image, and `pull_policy: always` is what stops a stale local
+# copy of the moving `latest` tag from shadowing it. Stacks with on-chain too:
 #   docker compose -f compose.yml -f compose.onchain.yml -f compose.image.yml up -d
 
 services:

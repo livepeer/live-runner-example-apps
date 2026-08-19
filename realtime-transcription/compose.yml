@@ -14,13 +14,11 @@ services:
       service: orchestrator
 
   app:
-    # Builds from source by default, rebuilding on every `up` so an edit is
-    # never silently ignored (the layer cache keeps that cheap). To run the
-    # published image instead of building:
-    #   APP_IMAGE=ghcr.io/livepeer/runner-example-realtime-transcription:latest \
-    #     APP_PULL_POLICY=always docker compose up -d
-    image: ${APP_IMAGE:-runner-example-realtime-transcription:local}
-    pull_policy: ${APP_PULL_POLICY:-build}
+    # Always rebuilds, so an edit is never silently ignored; the layer cache
+    # keeps that near-instant. The tag is local-only, so `up` never contacts a
+    # registry. Add compose.image.yml to run the published image instead.
+    image: runner-example-realtime-transcription:local
+    pull_policy: build
     build: .
     container_name: example_apps_realtime_transcription
     # Wait for the orchestrator's healthcheck so registration doesn't race its boot.

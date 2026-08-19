@@ -34,7 +34,7 @@ The output image is identical either way. **Capacity changes throughput, not the
 ## Run offchain (free)
 
 > [!TIP]
-> Built locally by the compose file below, or run the published [`ghcr.io/livepeer/runner-example-tiles`](https://github.com/livepeer/runner-app-examples/pkgs/container/runner-example-tiles) instead by setting `APP_IMAGE` and `APP_PULL_POLICY=always` — the package is public, so no login; see [Images](../README.md#images).
+> Built locally by the compose file below, or run the published [`ghcr.io/livepeer/runner-example-tiles`](https://github.com/livepeer/runner-app-examples/pkgs/container/runner-example-tiles) instead with `-f compose.yml -f compose.image.yml` — the package is public, so no login; see [Images](../README.md#images).
 
 ```sh
 CAPACITY=1 docker compose up -d --build

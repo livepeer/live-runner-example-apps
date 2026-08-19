@@ -164,11 +164,12 @@ Each entry lists its `runners` with an `app`, `version`, capacity, and `price_in
 
 Apps that integrate the live runner and live in their own repos — production deployments and standalone examples alike. This table is links-only: the code, CI, and support stay with the author.
 
-| Project                                                                                               | What it is                                                                               | Transport           |
-| ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------- |
-| [daydreamlive/scope](https://github.com/daydreamlive/scope/tree/ja/runner)                            | Real-time AI video with downloadable LoRA models                                         | WebSocket + trickle |
-| [livepeer/api-proxy](https://github.com/livepeer/api-proxy)                                           | Attach several API endpoints dynamically — key storage and request stats for operators   | HTTP                |
-| [Gideonjon/vllm-realtime-livepeer-runner](https://github.com/Gideonjon/vllm-realtime-livepeer-runner) | Real-time speech-to-text — trickle audio in, WebSocket transcript out, with live metrics | WebSocket + trickle |
+| Project                                                                                                 | What it is                                                                                            | Transport           |
+| ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------- |
+| [daydreamlive/scope](https://github.com/daydreamlive/scope/tree/ja/runner)                              | Real-time AI video with downloadable LoRA models                                                      | WebSocket + trickle |
+| [livepeer/api-proxy](https://github.com/livepeer/api-proxy)                                             | Attach several API endpoints dynamically — key storage and request stats for operators                | HTTP                |
+| [Gideonjon/vllm-realtime-livepeer-runner](https://github.com/Gideonjon/vllm-realtime-livepeer-runner)   | Real-time speech-to-text — trickle audio in, WebSocket transcript out, with live metrics              | WebSocket + trickle |
+| [livepeer/streamdiffusion-livepeer-runner](https://github.com/livepeer/streamdiffusion-livepeer-runner) | Realtime prompt-driven img2img — a third-party StreamDiffusion server run unmodified, reverse-proxied | WebSocket + HTTP    |
 
 **Building one?** Start from [**template-livepeer-runner**](https://github.com/livepeer/template-livepeer-runner) — a working app, client, and compose setup you can run in one command, offchain or on-chain. The examples here are not copyable as-is: each one's `compose.yml` pulls the orchestrator from a shared file one directory up.
 

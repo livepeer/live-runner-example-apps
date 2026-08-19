@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
-"""tiles client: split an image, fan out one session per tile, stitch the results.
+"""tiles client: split an image, fan out one single-shot call per tile, stitch the results.
 
-Opens all tile sessions concurrently; the runner's `capacity` gates how many are live
-at once. At capacity=1 tiles serialize; at capacity=N they process in parallel and the
-whole image finishes far faster. Same output either way — capacity changes speed, not
-result.
+Fires all tile calls concurrently; the runner's `capacity` gates how many run at once.
+At capacity=1 tiles serialize; at capacity=N they process in parallel and the whole
+image finishes far faster. Same output either way — capacity changes speed, not result.
 
 Livepeer integration (grep `# Livepeer:`):
-  1. reserve_session()      — discover orchestrators advertising the app, reserve one
-  2. call_runner()          — invoke /tile through the orchestrator
-  3. stop_runner_session()  — end the session (settles payment on-chain)
+  1. runner_selector()  — discover orchestrators advertising the app
+  2. call_runner()      — run one tile through the orchestrator; on the paid path it
+                          answers the 402 payment challenge inline (one fixed payment
+                          per tile). Single-shot needs no reserve/stop: the orchestrator
+                          reserves a session for the call and releases it on return.
 
-A reserve is refused while the runner is at capacity, so it retries with backoff until a
-slot frees; that wait is exactly the capacity limit doing its job.
+A call is refused with HTTP 503 while the runner is at capacity, so it retries with
+backoff until a slot frees; that wait is exactly the capacity limit doing its job.
 """
 
 from __future__ import annotations
@@ -23,7 +24,6 @@ import base64
 import logging
 import random
 import time
-from contextlib import suppress
 from pathlib import Path
 from typing import Iterator
 
@@ -32,13 +32,14 @@ import numpy as np
 
 from livepeer_gateway.errors import (
     LivepeerGatewayError,
+    LivepeerHTTPError,
     NoOrchestratorAvailableError,
     NoRunnerAvailableError,
 )
-from livepeer_gateway.live_runner import call_runner, stop_runner_session
-from livepeer_gateway.selection import LiveRunnerSession, reserve_session
+from livepeer_gateway.live_runner import LiveRunnerCallResult, call_runner
+from livepeer_gateway.selection import runner_selector
 
-DEFAULT_DISCOVERY = "http://localhost:8935/discovery"
+DEFAULT_DISCOVERY = "https://localhost:8935/discovery"
 APP_ID = "livepeer-example/tiles"
 DEFAULT_OUTPUT = "tiles-out.png"
 
@@ -62,7 +63,7 @@ def _parse_args() -> argparse.Namespace:
         "--signer", default="", help="Remote signer base URL (on-chain/paid path)."
     )
     parser.add_argument(
-        "--reserve-timeout",
+        "--slot-timeout",
         type=float,
         default=120.0,
         help="Max seconds to wait for a capacity slot per tile.",
@@ -91,19 +92,53 @@ def _split(
         y0 += row.shape[0]
 
 
-async def _reserve_with_retry(
-    *, discovery_url: str, signer_url: str | None, deadline: float
-) -> LiveRunnerSession:
-    # A full runner refuses the reserve; wait for a slot instead of failing the tile.
+async def _call_tile_with_retry(
+    *,
+    r: int,
+    c: int,
+    payload: dict[str, str],
+    discovery_url: str,
+    signer_url: str | None,
+    deadline: float,
+) -> LiveRunnerCallResult:
+    # A full runner refuses the call with 503; wait for a slot instead of failing the
+    # tile. Re-discover each attempt so a restarted runner is picked up.
     cap = 0.25
+    waiting = False
     while True:
         try:
-            return await reserve_session(
-                discovery_url=discovery_url, app=APP_ID, signer_url=signer_url
-            )  # Livepeer: 1
-        except (NoRunnerAvailableError, NoOrchestratorAvailableError):
+            cursor = await runner_selector(  # Livepeer: 1
+                discovery_url=discovery_url,  # omit if the signer does discovery itself
+                app=APP_ID,
+            )
+            runner = cursor.candidates[0]
+            return await call_runner(  # Livepeer: 2
+                runner=runner,  # discovery metadata tells call_runner the price unit
+                runner_url=runner.url.rstrip("/") + "/tile",
+                payload=payload,
+                signer_url=signer_url,
+                timeout=60.0,
+            )
+        except (
+            NoRunnerAvailableError,
+            NoOrchestratorAvailableError,
+            LivepeerHTTPError,
+        ) as exc:
+            # Anything but "insufficient capacity" (503) is a real error, not a
+            # full runner.
+            if isinstance(exc, LivepeerHTTPError) and exc.status_code != 503:
+                raise
             if time.monotonic() >= deadline:
                 raise
+            if not waiting:
+                # Warn once per tile; the reason tells a full runner from a dead one.
+                log.warning(
+                    "tile (%d,%d) no slot yet, retrying until --slot-timeout: %s",
+                    r,
+                    c,
+                    exc,
+                )
+                waiting = True
             # Full jitter: sleep a random slice of the (growing) window so many
             # tiles retrying at once spread out instead of stampeding in lockstep.
             await asyncio.sleep(random.uniform(0, cap))
@@ -118,7 +153,7 @@ async def _process_tile(
     discovery_url: str,
     signer_url: str | None,
     t0: float,
-    reserve_timeout: float,
+    slot_timeout: float,
     dump_dir: Path | None,
 ) -> np.ndarray:
     # Encode the tile as PNG for the JSON payload.
@@ -126,46 +161,37 @@ async def _process_tile(
     if not ok:
         raise LivepeerGatewayError(f"tile ({r},{c}): could not encode PNG")
 
-    deadline = time.monotonic() + reserve_timeout
-    session = None
-    try:
-        # Reserve a slot (waits out capacity), then run the tile through the runner.
-        session = await _reserve_with_retry(
-            discovery_url=discovery_url, signer_url=signer_url, deadline=deadline
-        )
-        log.info("tile (%d,%d) reserved (+%.1fs)", r, c, time.monotonic() - t0)
-        result = await call_runner(  # Livepeer: 2
-            runner_url=session.app_url.rstrip("/") + "/tile",
-            payload={"tile": base64.b64encode(png.tobytes()).decode()},
-            signer_url=signer_url,
-            timeout=60.0,
-        )
+    # One single-shot call per tile (waits out capacity); the orchestrator reserves
+    # and releases the session around the call.
+    result = await _call_tile_with_retry(
+        r=r,
+        c=c,
+        payload={"tile": base64.b64encode(png.tobytes()).decode()},
+        discovery_url=discovery_url,
+        signer_url=signer_url,
+        deadline=time.monotonic() + slot_timeout,
+    )
 
-        # Pull the processed tile out of the response.
-        out_b64 = result.data.get("tile")
-        if not isinstance(out_b64, str) or not out_b64:
-            raise LivepeerGatewayError(f"tile ({r},{c}): response missing 'tile'")
-        log.info("tile (%d,%d) done (+%.1fs)", r, c, time.monotonic() - t0)
+    # Pull the processed tile out of the response.
+    out_b64 = result.data.get("tile")
+    if not isinstance(out_b64, str) or not out_b64:
+        raise LivepeerGatewayError(f"tile ({r},{c}): response missing 'tile'")
+    log.info("tile (%d,%d) done (+%.1fs)", r, c, time.monotonic() - t0)
 
-        # Decode base64 PNG back to pixels, refitting to the tile's exact size.
-        out = cv2.imdecode(
-            np.frombuffer(base64.b64decode(out_b64), dtype=np.uint8), cv2.IMREAD_COLOR
-        )
-        if out is None:
-            raise LivepeerGatewayError(f"tile ({r},{c}): undecodable image from runner")
-        h, w = tile.shape[:2]
-        if out.shape[:2] != (h, w):
-            out = cv2.resize(out, (w, h))
+    # Decode base64 PNG back to pixels, refitting to the tile's exact size.
+    out = cv2.imdecode(
+        np.frombuffer(base64.b64decode(out_b64), dtype=np.uint8), cv2.IMREAD_COLOR
+    )
+    if out is None:
+        raise LivepeerGatewayError(f"tile ({r},{c}): undecodable image from runner")
+    h, w = tile.shape[:2]
+    if out.shape[:2] != (h, w):
+        out = cv2.resize(out, (w, h))
 
-        if dump_dir is not None:
-            cv2.imwrite(str(dump_dir / f"tile_r{r}_c{c}_in.png"), tile)
-            cv2.imwrite(str(dump_dir / f"tile_r{r}_c{c}_out.png"), out)
-        return out
-    finally:
-        # Always release the session so the slot frees for a waiting tile.
-        if session is not None:
-            with suppress(Exception):
-                await stop_runner_session(session)  # Livepeer: 3
+    if dump_dir is not None:
+        cv2.imwrite(str(dump_dir / f"tile_r{r}_c{c}_in.png"), tile)
+        cv2.imwrite(str(dump_dir / f"tile_r{r}_c{c}_out.png"), out)
+    return out
 
 
 async def main() -> None:
@@ -184,7 +210,7 @@ async def main() -> None:
 
     pieces = list(_split(img, grid))
     log.info(
-        "split %s into %d tiles (%dx%d grid); fanning out one session per tile",
+        "split %s into %d tiles (%dx%d grid); fanning out one call per tile",
         input_path.name,
         len(pieces),
         grid,
@@ -206,7 +232,7 @@ async def main() -> None:
                     discovery_url=args.discovery,
                     signer_url=args.signer.strip() or None,
                     t0=t0,
-                    reserve_timeout=args.reserve_timeout,
+                    slot_timeout=args.slot_timeout,
                     dump_dir=dump_dir,
                 )
                 for (r, c, _y0, _x0, tile) in pieces

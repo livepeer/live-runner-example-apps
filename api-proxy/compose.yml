@@ -1,0 +1,26 @@
+# End-to-end offchain demo: orchestrator + the api-proxy "app" — a stock nginx
+# attached as two static runners via runners.json (-liveRunnerConfig). There is
+# no app code at all: nginx.conf.template is the whole runner, and it serves two
+# capabilities from one process because a capability is a registration.
+#
+# Needs HF_TOKEN (the upstream credential nginx injects) in a local .env — copy
+# .env.example. Once up, call it from the host with the SDK:
+#   docker compose up -d
+#   uv run client.py --prompt "..." --discovery https://localhost:8935/discovery
+
+services:
+  orchestrator:
+    extends:
+      file: ../compose.orchestrator.static.yml
+      service: orchestrator
+    volumes:
+      - ./runners.json:/config/runners.json:ro
+
+  app:
+    image: nginx:1.27-alpine
+    container_name: example_apps_api_proxy
+    environment:
+      # The operator-held upstream credential (huggingface.co → settings → tokens).
+      - HF_TOKEN=${HF_TOKEN:?set HF_TOKEN in .env (copy .env.example)}
+    volumes:
+      - ./nginx.conf.template:/etc/nginx/templates/default.conf.template:ro

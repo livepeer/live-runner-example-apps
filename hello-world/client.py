@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""hello-world client: reserve an orchestrator session, call the app, settle up.
+"""hello-world client: discover a runner, call the app, pay inline.
 
 Livepeer integration (grep `# Livepeer:`):
-  1. reserve_session()      — discover orchestrators advertising the app, reserve one
-                             (to be removed once #4 lands)
-  2. call_runner()          — invoke the app through the orchestrator
-  3. stop_runner_session()  — end the session (settles payment on-chain)
+  1. runner_selector()  — discover orchestrators advertising the app
+  2. call_runner()      — call the app through the orchestrator; on the paid path it
+                          answers the 402 payment challenge inline. Single-shot needs
+                          no reserve/stop: the orchestrator reserves the session for
+                          this one request and releases it when the response returns.
 """
 
 from __future__ import annotations
@@ -13,13 +14,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-from contextlib import suppress
 
 from livepeer_gateway.errors import LivepeerGatewayError
-from livepeer_gateway.live_runner import call_runner, stop_runner_session
-from livepeer_gateway.selection import reserve_session
+from livepeer_gateway.live_runner import call_runner
+from livepeer_gateway.selection import runner_selector
 
-DEFAULT_DISCOVERY = "http://localhost:8935/discovery"
+DEFAULT_DISCOVERY = "https://localhost:8935/discovery"
 APP_ID = "livepeer-example/hello-world"
 
 log = logging.getLogger("hello-world-client")
@@ -51,18 +51,17 @@ async def main() -> None:
     signer_headers = None
     if args.api_key.strip():
         signer_headers = {"Authorization": f"Bearer {args.api_key.strip()}"}
-    session = None
     try:
-        session = await reserve_session(  # Livepeer: 1 (to be removed once #4 lands)
-            discovery_url=args.discovery,
+        cursor = await runner_selector(  # Livepeer: 1
+            discovery_url=args.discovery,  # omit if the signer does discovery itself
             app=APP_ID,
-            signer_url=signer_url,
-            signer_headers=signer_headers,
         )
-        log.info("session_id=%s app_url=%s", session.session_id, session.app_url)
+        runner = cursor.candidates[0]
+        log.info("app_url=%s", runner.url)
 
         result = await call_runner(  # Livepeer: 2
-            runner_url=session.app_url.rstrip("/") + "/hello",
+            runner=runner,  # discovery metadata tells call_runner the price unit
+            runner_url=runner.url.rstrip("/") + "/hello",
             payload={"name": args.name},
             signer_url=signer_url,
             signer_headers=signer_headers,
@@ -70,10 +69,6 @@ async def main() -> None:
         print(result.data)
     except LivepeerGatewayError as exc:
         raise SystemExit(f"ERROR: {exc}") from exc
-    finally:
-        if session is not None:
-            with suppress(Exception):
-                await stop_runner_session(session)  # Livepeer: 3
 
 
 if __name__ == "__main__":

@@ -1,11 +1,12 @@
-# On-chain payment overlay for hello-world. Layer it on the offchain base:
-#   docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d --build
+# On-chain payment overlay for tiles. Layer it on the offchain base:
+#   CAPACITY=9 docker compose -f compose.yml -f compose.onchain.yml up -d --build
 #
 # Adds the shared remote signer, re-points the orchestrator on-chain (see
-# ../compose.onchain.yml), and registers the app with a price so the
-# orchestrator issues a payment challenge. Requires a local .env (gitignored);
-# copy .env.example and fill it in. Then pay through the signer:
-#   uv run client.py --name livepeer \
+# ../compose.onchain.yml), and registers the app with a price so the orchestrator
+# issues a payment challenge. Requires a local .env (gitignored); copy .env.example
+# and fill it in. Each tile is one paid single-shot call, so keep the grid small
+# on-chain. Then pay through the signer:
+#   uv run client.py photo.jpg \
 #     --discovery https://localhost:8935/discovery \
 #     --signer http://localhost:7936
 
@@ -29,5 +30,6 @@ services:
       - --orchestrator=https://orchestrator:8935
       - --orchSecret=abcdef
       - --runner-url=http://app:8989
-      - --price=${PRICE_PER_UNIT}
-      - --pixels-per-unit=${PIXELS_PER_UNIT}
+      - --capacity=${CAPACITY:-4}
+      # Billed once per tile (fixed pricing); price cap in .env.example.
+      - --price=${PRICE}

@@ -1,0 +1,22 @@
+{
+  "runners": [
+    {
+      "label": "api-proxy-sd3",
+      "app": "livepeer-example/stable-diffusion-3-medium",
+      "runner_url": "http://app:8989/sd3",
+      "health_url": "http://app:8989/health",
+      "mode": "single-shot",
+      "capacity": 4,
+      "price_info": { "price": 0.0001, "unit": "fixed" }
+    },
+    {
+      "label": "api-proxy-flux",
+      "app": "livepeer-example/flux-1-schnell",
+      "runner_url": "http://app:8989/flux",
+      "health_url": "http://app:8989/health",
+      "mode": "single-shot",
+      "capacity": 4,
+      "price_info": { "price": 0.00004, "unit": "fixed" }
+    }
+  ]
+}

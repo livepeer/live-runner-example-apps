@@ -1,0 +1,11 @@
+[project]
+name = "livepeer-realtime-transcription"
+version = "0.1.0"
+description = "Streaming speech-to-text (WebSocket) example app for the Livepeer network."
+requires-python = ">=3.12"
+dependencies = [
+    "faster-whisper",   # runner: streaming Whisper ASR
+    "numpy",            # runner: PCM buffers + energy VAD
+    "aiohttp",
+    "livepeer-gateway>=1.0.0",
+]

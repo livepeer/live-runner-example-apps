@@ -28,7 +28,7 @@ log = logging.getLogger("hello-world")
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Live Runner hello-world demo.")
-    parser.add_argument("--orchestrator", default="http://localhost:8935")
+    parser.add_argument("--orchestrator", default="https://localhost:8935")
     parser.add_argument("--orchSecret", default="abcdef")
     parser.add_argument("--runner-url", default=f"http://{DEFAULT_HOST}:{DEFAULT_PORT}")
     parser.add_argument(
@@ -36,21 +36,20 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--price",
-        type=int,
+        type=float,
         default=0,
-        help="Price in USD per pixels-per-unit (0 = free, the offchain default).",
-    )
-    parser.add_argument(
-        "--pixels-per-unit",
-        type=int,
-        default=1,
-        help="Scale factor: price is charged per this many units.",
+        help="Runner price in USD per call (0 = free, the offchain default).",
     )
     return parser.parse_args()
 
 
 async def _handle_hello(request: web.Request) -> web.Response:
-    payload = await request.json()
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = None
+    if not isinstance(payload, dict):
+        raise web.HTTPBadRequest(text="body must be a JSON object")
     name = str(payload.get("name", "world"))
     return web.json_response({"message": f"Hello, {name}!"})
 
@@ -67,11 +66,10 @@ def main() -> None:
             secret=args.orchSecret,
             runner_url=args.runner_url,
             app=APP_ID,
-            # single-shot by nature; stays persistent until single-shot payment lands
-            # (go-livepeer#3955)
-            mode="persistent",
-            price_per_unit=args.price,
-            pixels_per_unit=args.pixels_per_unit,
+            mode="single-shot",
+            price=args.price,  # USD per call
+            # one flat payment per call instead of per-second metering
+            unit="fixed",
         )
         log.info(
             "registered runner_id=%s orchestrator=%s",

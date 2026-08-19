@@ -15,3 +15,29 @@ jobs:
           python-version: "3.12"
       # Runs every hook in .pre-commit-config.yaml against all files.
       - uses: pre-commit/action@v3.0.1
+
+  # Every example pulls the orchestrator from ../compose.orchestrator.yml via
+  # `extends`, so one edit there breaks all of them and nobody runs all of them
+  # before merging. `config` parses and merges; it builds and starts nothing.
+  compose:
+    runs-on: ubuntu-latest
+    env:
+      HF_TOKEN: dummy # api-proxy requires it; every other variable has a default
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate every example's compose file
+        run: |
+          status=0
+          for dir in */; do
+            example=${dir%/}
+            [ -f "$example/compose.yml" ] || continue
+            docker compose -f "$example/compose.yml" config --quiet || status=1
+            # The on-chain overlay is the one nobody runs before merging: it needs
+            # a wallet, an RPC and a keystore. Interpolating .env.example also
+            # proves that file still lists every variable the overlay reads.
+            [ -f "$example/compose.onchain.yml" ] || continue
+            docker compose --env-file "$example/.env.example" \
+              -f "$example/compose.yml" -f "$example/compose.onchain.yml" \
+              config --quiet || status=1
+          done
+          exit $status

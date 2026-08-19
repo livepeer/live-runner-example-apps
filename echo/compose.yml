@@ -4,7 +4,7 @@
 # pulled in with `extends`; this file only adds the app. Once up, drive it from
 # the host with the SDK client and a sample video:
 #   docker compose up -d --build
-#   uv run client.py --blur ~/samples/clip.mp4   # writes echo-out.ts
+#   uv run client.py --mode blur sample.mp4   # writes echo-out.ts
 
 services:
   orchestrator:
@@ -13,6 +13,9 @@ services:
       service: orchestrator
 
   app:
+    # `up` always builds; `--pull always` runs the published image instead.
+    image: ghcr.io/livepeer/runner-example-echo:latest
+    pull_policy: build
     build: .
     container_name: example_apps_echo
     # Wait for the orchestrator's healthcheck so registration doesn't race its boot.

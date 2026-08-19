@@ -6,9 +6,15 @@ frames back from `out`. Input/output can be files or stdin/stdout pipes, so you 
 chain `ffmpeg -> client -> ffplay`.
 
 Livepeer integration (grep `# Livepeer:`):
-  1. reserve_session()        — discover the runner, reserve a session
+  1. reserve_session()        — discover the runner, reserve a session. On the paid
+                                path it answers the 402 challenge and then keeps the
+                                session funded in the background, because the price is
+                                metered: the orchestrator debits every few seconds and
+                                releases the session on the first debit it cannot cover.
   2. MediaPublish/MediaOutput — publish frames to `in`, read echoed frames from `out`
-  3. stop_runner_session()    — end the session (settles payment on-chain)
+  3. stop_runner_session()    — end the session. Leaving the `async with` stops the
+                                funding first, so nothing is paid for a session that
+                                is about to go away.
 """
 
 from __future__ import annotations
@@ -16,9 +22,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import threading
 import sys
 import time
+from collections.abc import AsyncIterator, Iterator
 from contextlib import nullcontext, suppress
+from queue import Queue
 from pathlib import Path
 
 import av
@@ -26,15 +35,20 @@ import av
 from livepeer_gateway.errors import LivepeerGatewayError
 from livepeer_gateway.live_runner import stop_runner_session
 from livepeer_gateway.media_output import MediaOutput
-from livepeer_gateway.media_publish import MediaPublish
+from livepeer_gateway.media_publish import (
+    AudioOutputConfig,
+    MediaPublish,
+    MediaPublishConfig,
+    VideoOutputConfig,
+)
 from livepeer_gateway.http import post_json
 from livepeer_gateway.selection import reserve_session
 
-DEFAULT_DISCOVERY = "http://localhost:8935/discovery"
+DEFAULT_DISCOVERY = "https://localhost:8935/discovery"
 APP_ID = "livepeer-example/echo"
 DEFAULT_OUTPUT = "echo-out.ts"
 MAX_BLUR_RADIUS = 100
-MODES = ("echo", "gray", "invert", "blur")
+MODES = ("echo", "gray", "invert", "blur", "robot")
 
 log = logging.getLogger("echo-client")
 
@@ -51,6 +65,9 @@ def _parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--discovery", default=DEFAULT_DISCOVERY)
+    parser.add_argument(
+        "--signer", default="", help="Remote signer base URL (on-chain/paid path)."
+    )
     parser.add_argument(
         "--output",
         default=DEFAULT_OUTPUT,
@@ -70,7 +87,8 @@ def _parse_args() -> argparse.Namespace:
         choices=MODES,
         default="echo",
         help=(
-            "Transform the runner applies: echo (passthrough), gray, invert, or blur. "
+            "Transform the runner applies: echo (passthrough), gray, invert, blur, "
+            "or robot (ring-modulates the audio). "
             "blur sweeps the radius; the rest are static."
         ),
     )
@@ -88,6 +106,36 @@ def _channel_url(echo_response: dict[str, object], name: str) -> str:
     if not isinstance(url, str) or not url:
         raise LivepeerGatewayError(f"echo response missing {name!r} url")
     return url
+
+
+async def _decode_in_thread(
+    frames: Iterator[av.VideoFrame | av.AudioFrame],
+) -> AsyncIterator[av.VideoFrame | av.AudioFrame]:
+    """Yield decoded frames without decoding on the event loop.
+
+    PyAV's decode() is a blocking generator, so driving the publish loop from it
+    directly stalls the async segment uploads while a frame is being decoded. The
+    queue is small on purpose: it decouples the two without adding latency.
+    """
+    queue: Queue[av.VideoFrame | av.AudioFrame | None] = Queue(maxsize=8)
+
+    def _pump() -> None:
+        try:
+            for frame in frames:
+                queue.put(frame)
+        finally:
+            queue.put(None)
+
+    thread = threading.Thread(target=_pump, daemon=True)
+    thread.start()
+    try:
+        while True:
+            frame = await asyncio.to_thread(queue.get)
+            if frame is None:
+                return
+            yield frame
+    finally:
+        thread.join(timeout=1.0)
 
 
 async def _publish_video(
@@ -108,7 +156,20 @@ async def _publish_video(
             raise LivepeerGatewayError(
                 f"No video stream found in input: {input_source}"
             )
-        publisher = MediaPublish(publish_url)  # Livepeer: 2 (publish frames)
+        # Only robot touches audio, so only robot publishes an audio track: the
+        # container waits for a first frame on every track it declares.
+        send_audio = mode == "robot"
+        if send_audio and not input_.streams.audio:
+            raise LivepeerGatewayError(
+                f"robot needs audio, but the input has none: {input_source}"
+            )
+        tracks: list[VideoOutputConfig | AudioOutputConfig] = [VideoOutputConfig()]
+        if send_audio:
+            # Pinned: opus rejects 44.1 kHz, so let MediaPublish resample to 48.
+            tracks.append(AudioOutputConfig(sample_rate=48000))
+        publisher = MediaPublish(  # Livepeer: 2 (publish frames)
+            publish_url, config=MediaPublishConfig(tracks=tracks)
+        )
         prev_pts_time: float | None = None
         prev_wall: float | None = None
         next_update_pts_time: float | None = None
@@ -117,9 +178,18 @@ async def _publish_video(
         # blur sweeps 0->max->0 (2*MAX steps); spread one full cycle over blur_period.
         update_interval = blur_period / (2 * MAX_BLUR_RADIUS)
 
+        video_index = 0
         try:
-            for index, frame in enumerate(input_.decode(video=0), start=1):
-                if max_frames > 0 and index > max_frames:
+            # decode() yields both streams interleaved; without audio, stay on the
+            # video stream alone. Pacing and the blur sweep run off video frames only.
+            frames = input_.decode() if send_audio else input_.decode(video=0)
+            async for frame in _decode_in_thread(frames):
+                if not isinstance(frame, av.VideoFrame):
+                    await publisher.write_frame(frame)
+                    continue
+
+                video_index += 1
+                if max_frames > 0 and video_index > max_frames:
                     break
                 current_pts_time = None
                 if frame.pts is not None and frame.time_base is not None:
@@ -189,41 +259,53 @@ async def main() -> None:
     session = None
 
     try:
-        session = await reserve_session(
-            discovery_url=args.discovery, app=APP_ID
-        )  # Livepeer: 1
+        session = await reserve_session(  # Livepeer: 1
+            discovery_url=args.discovery,  # omit if the signer does discovery itself
+            app=APP_ID,
+            signer_url=args.signer.strip() or None,
+        )
         log.info("session_id=%s app_url=%s", session.session_id, session.app_url)
 
-        echo = await post_json(
-            f"{session.app_url.rstrip('/')}/echo",
-            {"radius": args.radius, "mode": args.mode},
-        )
-        in_url = _channel_url(echo, "in")
-        out_url = _channel_url(echo, "out")
-        log.info("in=%s out=%s", in_url, out_url)
+        # The session funds itself while it is held; leaving this block stops that.
+        async with session:
+            echo = await post_json(
+                f"{session.app_url.rstrip('/')}/echo",
+                # robot is the mode that transforms audio, so it is also the one
+                # that asks the runner for an audio track.
+                {
+                    "radius": args.radius,
+                    "mode": args.mode,
+                    "audio": args.mode == "robot",
+                },
+            )
+            in_url = _channel_url(echo, "in")
+            out_url = _channel_url(echo, "out")
+            log.info("in=%s out=%s", in_url, out_url)
 
-        with (
-            nullcontext(sys.stdout.buffer) if output_stdout else output_path.open("wb")
-        ) as fh:
+            with (
+                nullcontext(sys.stdout.buffer)
+                if output_stdout
+                else output_path.open("wb")
+            ) as fh:
 
-            def _write_chunk(chunk: bytes) -> None:
-                fh.write(chunk)
-                if output_stdout:
-                    fh.flush()
+                def _write_chunk(chunk: bytes) -> None:
+                    fh.write(chunk)
+                    if output_stdout:
+                        fh.flush()
 
-            async with MediaOutput(
-                out_url, on_bytes=_write_chunk
-            ):  # Livepeer: 2 (read echoed frames)
-                await _publish_video(
-                    input_source,
-                    in_url,
-                    max_frames=max(0, args.max_frames),
-                    app_url=session.app_url,
-                    mode=args.mode,
-                    blur_period=args.blur_period,
-                )
-                log.info("publish complete; waiting for output to drain...")
-            fh.flush()
+                async with MediaOutput(
+                    out_url, on_bytes=_write_chunk
+                ):  # Livepeer: 2 (read echoed frames)
+                    await _publish_video(
+                        input_source,
+                        in_url,
+                        max_frames=max(0, args.max_frames),
+                        app_url=session.app_url,
+                        mode=args.mode,
+                        blur_period=args.blur_period,
+                    )
+                    log.info("publish complete; waiting for output to drain...")
+                fh.flush()
     except LivepeerGatewayError as exc:
         raise SystemExit(f"ERROR: {exc}") from exc
     finally:

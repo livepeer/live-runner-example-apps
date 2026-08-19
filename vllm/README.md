@@ -5,15 +5,13 @@ Runs an OpenAI-compatible LLM on the Livepeer network and consumes it with the *
 |              |                                            |
 | ------------ | ------------------------------------------ |
 | App id       | `vllm/qwen2.5-0.5b-instruct`               |
-| Runner mode  | persistent (single-shot by nature)         |
+| Runner mode  | single-shot (one session per call)         |
 | Registration | static (orchestrator config + health poll) |
 | Transport    | HTTP + SSE (OpenAI `/v1/chat/completions`) |
+| Pricing      | hour (metered per second of the call)      |
 | Port         | 8000 (vLLM), 18080 (gateway)               |
 
-**Requires an NVIDIA GPU** for vLLM. The default model (`Qwen/Qwen2.5-0.5B-Instruct`) is tiny so it fits a modest card; override with `VLLM_MODEL`. The default image tag (`v0.9.2`) targets **CUDA 12.8** hosts; `vllm/vllm-openai:latest` needs **CUDA 13+** (set `VLLM_IMAGE` in `.env` to override). Prerequisites (Docker, `uv`, the not-yet-released SDK) and the shared on-chain/payment setup are in the [repo README](../README.md).
-
-> [!NOTE]
-> This app is single-shot by nature but currently registers as **persistent**. It will switch to **single-shot** once [#5](https://github.com/livepeer/live-runner-example-apps/issues/5) lands.
+**Requires an NVIDIA GPU** for vLLM. The default model (`Qwen/Qwen2.5-0.5B-Instruct`) is tiny so it fits a modest card; override with `VLLM_MODEL`. The default image tag (`v0.9.2`) targets **CUDA 12.8** hosts; `vllm/vllm-openai:latest` needs **CUDA 13+** (set `VLLM_IMAGE` in `.env` to override). Prerequisites (Docker, `uv`, the [SDK](https://pypi.org/project/livepeer-gateway/)) and the shared on-chain/payment setup are in the [repo README](../README.md).
 
 ## How it's wired
 
@@ -26,7 +24,9 @@ Two sides:
 
 The local gateway is a _client-side_ component, so it runs on the host like the client, not in the infra compose.
 
-The gateway is the **only** Livepeer-aware piece in the whole path — and it's tiny: three SDK calls, `reserve_session` → `call_runner` → `stop_runner_session` (grep `# Livepeer:` in [gateway.py](gateway.py)). They exist _purely_ because an OpenAI client has no idea how to discover a runner or settle Livepeer's payments. Move that glue into the gateway and everything else — `client.py`, any OpenAI SDK, `curl` — stays 100% stock OpenAI, oblivious to Livepeer.
+The gateway is the **only** Livepeer-aware piece in the whole path — and it's tiny: two SDK calls, `runner_selector` → `call_runner` (grep `# Livepeer:` in [gateway.py](gateway.py)). They exist _purely_ because an OpenAI client has no idea how to discover a runner or settle Livepeer's payments. Move that glue into the gateway and everything else — `client.py`, any OpenAI SDK, `curl` — stays 100% stock OpenAI, oblivious to Livepeer.
+
+The runner is **single-shot**, so the orchestrator reserves a session around each call and releases it when the response returns; the gateway never manages one, which is why there is no third SDK call. Pricing is still metered, so the call pays for as long as it runs and a long generation costs what it takes. With `capacity: 1`, a second request arriving while one is in flight gets a 503, which the gateway hands back as a JSON error rather than an opaque 500.
 
 ## Run offchain (free)
 
@@ -47,9 +47,6 @@ curl http://localhost:18080/v1/chat/completions \
 
 ### Streaming (SSE)
 
-> [!IMPORTANT]
-> SSE streaming depends on gateway PR [#25](https://github.com/livepeer/livepeer-python-gateway/pull/25), which is not yet merged. This example pins the SDK to its branch (`rs/live-runner-streaming` in `pyproject.toml`); until it lands, streaming is only available from that branch, not `ja/live-runner`.
-
 Set `stream: true` and tokens arrive as they're generated instead of in one blob — the gateway forwards the runner's `text/event-stream` straight through (`call_runner(..., stream=True)`), no buffering. Payment is unchanged: the 402 challenge is handled before any tokens flow.
 
 ```sh
@@ -66,14 +63,16 @@ curl -N http://localhost:18080/v1/chat/completions \
 
 ## Run on-chain (paid)
 
-Layer `docker-compose.onchain.yml` to add a remote signer and run the orchestrator on-chain, so vLLM advertises the price from `runners.json` and the gateway pays per call. Needs an Ethereum RPC, a funded signer wallet (deposit + reserve), and an orchestrator wallet — see [On-chain (paid) setup](../README.md#on-chain-paid-setup) in the repo README.
+Layer `compose.onchain.yml` to add a remote signer and run the orchestrator on-chain, so vLLM advertises the price from `runners.json` and the gateway pays per call. Needs an Ethereum RPC, a funded signer wallet (deposit + reserve), and an orchestrator wallet — see [On-chain (paid) setup](../README.md#on-chain-paid-setup) in the repo README.
 
 ```sh
 cp .env.example .env   # fill in RPC, network, keystore paths, accounts
-docker compose -f docker-compose.yml -f docker-compose.onchain.yml up -d
+docker compose -f compose.yml -f compose.onchain.yml up -d
 uv run gateway.py --signer http://localhost:7936 --api-key "$API_KEY" &     # gateway pays per request
 uv run client.py --prompt "In one sentence, what is Livepeer?"
-kill %1; docker compose -f docker-compose.yml -f docker-compose.onchain.yml down
+kill %1; docker compose -f compose.yml -f compose.onchain.yml down
 ```
 
 The client is **unchanged** — only the gateway gets `--signer` and optional `--api-key` (passed as `Authorization: Bearer` / `signer_headers` to the SDK); it pays per call through the remote signer, so the consumer never sees discovery or payment. The price is set in `runners.json` (see the comments in `.env.example`).
+
+Pricing note: the orchestrator meters compute per **second** of the call, not per token. Probabilistic payments are made up front, so token counts can't drive protocol pricing. Per-token billing is left to the signer/gateway layer, which sees `usage` in every response and can bill users per token while paying the orchestrator per second.

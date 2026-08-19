@@ -1,7 +1,7 @@
 # Shared on-chain payment services: remote signer + on-chain orchestrator.
-# Pulled into each example's docker-compose.onchain.yml via `extends` and
+# Pulled into each example's compose.onchain.yml via `extends` and
 # layered on the offchain base:
-#   docker compose -f docker-compose.yml -f docker-compose.onchain.yml up
+#   docker compose -f compose.yml -f compose.onchain.yml up
 #
 # signer: standalone `-remoteSigner` holding the funded payer wallet, mints
 #   tickets (cannot run offchain). The SDK client pays via --signer.
@@ -13,7 +13,8 @@
 
 services:
   signer:
-    image: livepeer/go-livepeer:ja-live-runner
+    # Master build, matching the orchestrator; see compose.orchestrator.yml.
+    image: livepeer/go-livepeer:v0.9.1
     container_name: example_apps_signer
     command:
       - -remoteSigner
@@ -24,9 +25,6 @@ services:
       - -ethPassword=${SIGNER_ETH_PASSWORD}
       - -httpAddr=0.0.0.0:7936
       - -maxPricePerUnit=${MAX_PRICE_PER_UNIT}
-      - -pixelsPerUnit=${PIXELS_PER_UNIT}
-      # Cap per-win payout so redemptions stay cheap and frequent
-      - -maxFaceValue=10000000000000
       - -v=6
       # Local demo only: skips signer caller-auth (it binds to 0.0.0.0 and signs
       # for any caller). In production, authorize callers via -remoteSignerWebhookUrl.
@@ -53,9 +51,11 @@ services:
       # Price comes from the app's registration; -pricePerUnit only sets the
       # unused legacy base price, but an on-chain O won't boot without it.
       - -pricePerUnit=0
-      # EV per ticket (not the price). The default (8e9) is too small here and
-      # trips the 100-tickets-per-payment cap; raise it to keep ~10 tickets.
-      - -ticketEV=1000000000000
+      # Expected value per ticket. A payment needs fee / ticketEV tickets and the
+      # signer signs at most 100 at once, which is what caps the price. At 1e10
+      # echo's 0.10 USD per hour signs 15 tickets upfront, 6 per top-up.
+      - -ticketEV=10000000000
+      - -maxFaceValue=4000000000000000
       - -monitor=false
       - -v=6
     volumes:

@@ -2,7 +2,7 @@
 """tiles app: a CPU-bound image processor, made callable on the Livepeer network.
 
 Each POST /tile stylizes one image tile (a deliberately CPU-heavy transform). The
-client splits an image into a grid and fans out one session per tile, so `capacity`
+client splits an image into a grid and fans out one call per tile, so `capacity`
 — the number of sessions the orchestrator routes here at once — decides how many
 tiles process in parallel. See the README for the capacity demo.
 
@@ -40,7 +40,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Live Runner tiles app demo (capacity showcase)."
     )
-    parser.add_argument("--orchestrator", default="http://localhost:8935")
+    parser.add_argument("--orchestrator", default="https://localhost:8935")
     parser.add_argument("--orchSecret", default="abcdef")
     parser.add_argument("--runner-url", default=f"http://{DEFAULT_HOST}:{DEFAULT_PORT}")
     parser.add_argument(
@@ -64,15 +64,9 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--price",
-        type=int,
+        type=float,
         default=0,
-        help="Price in USD per pixels-per-unit (0 = free, the offchain default).",
-    )
-    parser.add_argument(
-        "--pixels-per-unit",
-        type=int,
-        default=1,
-        help="Scale factor: price is charged per this many units.",
+        help="Runner price in USD per tile (0 = free, the offchain default).",
     )
     return parser.parse_args()
 
@@ -101,7 +95,12 @@ def _process(png: bytes, work: int) -> bytes:
 
 
 async def _handle_tile(request: web.Request) -> web.Response:
-    payload = await request.json()
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = None
+    if not isinstance(payload, dict):
+        raise web.HTTPBadRequest(text="body must be a JSON object")
     b64 = payload.get("tile")
     if not isinstance(b64, str) or not b64:
         raise web.HTTPBadRequest(text="missing 'tile' (base64 PNG)")
@@ -126,12 +125,11 @@ def main() -> None:
             secret=args.orchSecret,
             runner_url=args.runner_url,
             app=APP_ID,
-            # single-shot by nature; stays persistent until single-shot payment lands
-            # (go-livepeer#3955)
-            mode="persistent",
+            mode="single-shot",
             capacity=args.capacity,  # the knob this example showcases
-            price_per_unit=args.price,
-            pixels_per_unit=args.pixels_per_unit,
+            price=args.price,  # USD per tile
+            # one flat payment per tile instead of per-second metering
+            unit="fixed",
         )
         log.info(
             "registered runner_id=%s capacity=%d orchestrator=%s",

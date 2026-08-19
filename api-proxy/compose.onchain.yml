@@ -1,0 +1,27 @@
+# On-chain payment overlay for api-proxy. Layer it on the offchain base:
+#   docker compose -f compose.yml -f compose.onchain.yml up -d --build
+#
+# Adds the shared remote signer and re-points the orchestrator on-chain (see
+# ../compose.onchain.yml), with runners.json mounted so the statically attached
+# runner advertises its fixed price and the orchestrator issues a payment
+# challenge. Requires a local .env (gitignored); copy .env.example and fill it
+# in. Then pay through the signer:
+#   uv run client.py --prompt "..." \
+#     --discovery https://localhost:8935/discovery \
+#     --signer http://localhost:7936
+
+services:
+  signer:
+    extends:
+      file: ../compose.onchain.yml
+      service: signer
+    ports:
+      - "7936:7936"
+
+  orchestrator:
+    extends:
+      file: ../compose.onchain.static.yml
+      service: orchestrator
+    volumes:
+      - ${ORCH_KEYSTORE_DIR}:/keystore:ro
+      - ./runners.json:/config/runners.json:ro

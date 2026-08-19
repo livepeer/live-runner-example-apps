@@ -1,0 +1,5 @@
+# Local audio and demo assets: the README shows how to make sample.wav.
+*.wav
+*.mp4
+*.srt
+media/

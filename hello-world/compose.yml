@@ -13,10 +13,11 @@ services:
       service: orchestrator
 
   app:
-    # Always rebuilds, so an edit is never silently ignored; the layer cache
-    # keeps that near-instant. The tag is local-only, so `up` never contacts a
-    # registry. Add compose.image.yml to run the published image instead.
-    image: runner-example-hello-world:local
+    # `pull_policy: build` means `up` always builds and never contacts a
+    # registry, so an edit is never silently ignored (the layer cache keeps the
+    # rebuild near-instant). `up --pull always` overrides it to run the
+    # published image instead.
+    image: ghcr.io/livepeer/runner-example-hello-world:latest
     pull_policy: build
     build: .
     container_name: example_apps_hello_world

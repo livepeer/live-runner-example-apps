@@ -1,0 +1,41 @@
+# Offchain demo on Intel VA-API (Arc / iGPU): orchestrator + the transcode app
+# built from Dockerfile.intel, full-GPU (decode + scale + encode) on /dev/dri.
+#
+#   docker compose -f docker-compose.intel.yml up -d --build
+#   uv run client.py clip.mp4 --heights 720,360
+#
+# RENDER_DEVICE picks the VA-API node (Arc dGPU is often renderD129, an iGPU
+# renderD128). RUNNER_GPU_* (optional) advertise the GPU to orchestrator discovery.
+services:
+  orchestrator:
+    extends:
+      file: ../compose.orchestrator.yml
+      service: orchestrator
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.intel
+    container_name: example_apps_transcode
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    devices:
+      - /dev/dri:/dev/dri
+    environment:
+      - RENDER_DEVICE=${RENDER_DEVICE:-/dev/dri/renderD128}
+      - HWACCEL_DECODE=1
+      # Optional: advertise the GPU to discovery (SDK auto-detect is NVIDIA-only).
+      # - RUNNER_GPU_NAME=Intel Arc A770
+      # - RUNNER_GPU_VRAM_MB=16384
+    command:
+      - python3
+      - runner.py
+      - --host=0.0.0.0
+      - --orchestrator=https://orchestrator:8935
+      - --orchSecret=abcdef
+      - --runner-url=http://app:8990
+      - --capacity=${TRANSCODE_CAPACITY:-4}
+      - --av1-encoder=${TRANSCODE_AV1_ENCODER:-av1_vaapi}
+      - --h264-encoder=${TRANSCODE_H264_ENCODER:-h264_vaapi}
+      - --h265-encoder=${TRANSCODE_H265_ENCODER:-hevc_vaapi}

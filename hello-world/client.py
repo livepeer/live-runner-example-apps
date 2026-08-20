@@ -27,7 +27,7 @@ log = logging.getLogger("hello-world-client")
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run the hello-world Live Runner demo."
+        description="Call a hello-world Live Runner and print the reply."
     )
     parser.add_argument("--discovery", default=DEFAULT_DISCOVERY)
     parser.add_argument("--name", default="livepeer")

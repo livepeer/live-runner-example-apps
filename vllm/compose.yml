@@ -2,7 +2,7 @@
 # static runner via runners.json (-liveRunnerConfig). Requires an NVIDIA GPU.
 # The gateway + OpenAI client run on the host (see README.md / gateway.py).
 #   docker compose up -d
-#   uv run gateway.py &                  # OpenAI endpoint on :8080 (host)
+#   uv run gateway.py &                  # OpenAI endpoint on :18080 (host)
 #   uv run client.py --prompt "Hello!"   # stock openai -> the gateway
 
 services:
@@ -14,7 +14,8 @@ services:
       - ./runners.json:/config/runners.json:ro
 
   vllm:
-    image: vllm/vllm-openai:latest
+    # `latest` requires CUDA 13+ in the container (driver ~575+). Pin for CUDA 12.8 hosts.
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.9.2}
     container_name: example_apps_vllm
     # Pinned, not a knob: runners.json advertises this model by name, so change both
     # together. --gpu-memory-utilization caps VRAM (0.9 default can exceed free).

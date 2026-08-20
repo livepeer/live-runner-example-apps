@@ -6,7 +6,7 @@ api_key. It has no idea it's talking to Livepeer. The local gateway (gateway.py)
 base_url and does discovery + payment, so this works on-chain unchanged.
 
     docker compose up -d --build          # the network side
-    uv run gateway.py &                    # the local gateway on :8080
+    uv run gateway.py &                    # the local gateway on :18080
     uv run client.py --prompt "Hello!"
 
 Any OpenAI tool (this script, another SDK, curl) can use the same base_url.
@@ -15,8 +15,15 @@ Any OpenAI tool (this script, another SDK, curl) can use the same base_url.
 from __future__ import annotations
 
 import argparse
+import os
 
 from openai import OpenAI
+
+DEFAULT_GATEWAY_PORT = int(os.environ.get("GATEWAY_PORT", "18080"))
+
+
+def _default_base_url() -> str:
+    return f"http://localhost:{DEFAULT_GATEWAY_PORT}/v1"
 
 
 def _parse_args() -> argparse.Namespace:
@@ -25,7 +32,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--base-url",
-        default="http://localhost:8080/v1",
+        default=_default_base_url(),
         help="The gateway's OpenAI endpoint.",
     )
     parser.add_argument(

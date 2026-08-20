@@ -34,6 +34,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--signer", default="", help="Remote signer base URL (on-chain/paid path)."
     )
+    parser.add_argument(
+        "--api-key",
+        default="",
+        help="Bearer credential for the signer (Authorization header).",
+    )
     return parser.parse_args()
 
 
@@ -43,6 +48,9 @@ async def main() -> None:
     )
     args = _parse_args()
     signer_url = args.signer.strip() or None
+    signer_headers = None
+    if args.api_key.strip():
+        signer_headers = {"Authorization": f"Bearer {args.api_key.strip()}"}
     try:
         cursor = await runner_selector(  # Livepeer: 1
             discovery_url=args.discovery,  # omit if the signer does discovery itself
@@ -56,6 +64,7 @@ async def main() -> None:
             runner_url=runner.url.rstrip("/") + "/hello",
             payload={"name": args.name},
             signer_url=signer_url,
+            signer_headers=signer_headers,
         )
         print(result.data)
     except LivepeerGatewayError as exc:

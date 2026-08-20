@@ -37,7 +37,9 @@ log = logging.getLogger("api-proxy-client")
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run the api-proxy Live Runner demo.")
+    parser = argparse.ArgumentParser(
+        description="Send a prompt to an api-proxy Live Runner and save the image."
+    )
     parser.add_argument(
         "--prompt", default="a watercolor painting of a llama writing code"
     )

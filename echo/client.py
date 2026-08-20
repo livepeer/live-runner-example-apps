@@ -55,7 +55,7 @@ log = logging.getLogger("echo-client")
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run the proxied echo Live Runner demo."
+        description="Send video through an echo Live Runner and read it back."
     )
     parser.add_argument(
         "input",

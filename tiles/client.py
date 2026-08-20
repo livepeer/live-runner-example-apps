@@ -48,7 +48,7 @@ log = logging.getLogger("tiles-client")
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run the tiles Live Runner demo (capacity showcase)."
+        description="Split an image, stylize each tile on a Live Runner, stitch it back."
     )
     parser.add_argument("input", help="input image file (png/jpg)")
     parser.add_argument("--output", default=DEFAULT_OUTPUT, help="output image path")

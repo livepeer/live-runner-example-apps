@@ -45,14 +45,14 @@ Need a transport that isn't here? [Open an issue](https://github.com/livepeer/ru
 
 ## Examples
 
-| Example                                              | Goal                                                                                     | Registration | Mode        | Transport         | Pricing |
-| ---------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------ | ----------- | ----------------- | ------- |
-| [`hello-world`](./hello-world)                       | The simplest app: one request, one response                                              | dynamic      | single-shot | HTTP (JSON)       | fixed   |
-| [`tiles`](./tiles)                                   | Capacity fan-out — one call per tile                                                     | dynamic      | single-shot | HTTP (base64 PNG) | fixed   |
-| [`api-proxy`](./api-proxy)                           | Pass calls through to hosted APIs — the operator holds the key, one capability per model | static       | single-shot | HTTP (JPEG bytes) | fixed   |
-| [`echo`](./echo)                                     | Realtime video, transformed and echoed back                                              | dynamic      | persistent  | trickle           | hour    |
-| [`vllm`](./vllm)                                     | Drop-in OpenAI API; the client stays unmodified                                          | static       | single-shot | HTTP + SSE        | hour    |
-| [`realtime-transcription`](./realtime-transcription) | Audio up, transcripts back, on one socket                                                | dynamic      | persistent  | WebSocket         | hour    |
+| Example                                              | Goal                                                                                     | Registration | Mode        | Transport           | Pricing |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------ | ----------- | ------------------- | ------- |
+| [`hello-world`](./hello-world)                       | The simplest app: one request, one response                                              | dynamic      | single-shot | HTTP (JSON)         | fixed   |
+| [`tiles`](./tiles)                                   | Capacity fan-out — one call per tile                                                     | dynamic      | single-shot | HTTP (base64 PNG)   | fixed   |
+| [`api-proxy`](./api-proxy)                           | Pass calls through to hosted APIs — the operator holds the key, one capability per model | static       | single-shot | HTTP (JPEG, labels) | fixed   |
+| [`echo`](./echo)                                     | Realtime video, transformed and echoed back                                              | dynamic      | persistent  | trickle             | hour    |
+| [`vllm`](./vllm)                                     | Drop-in OpenAI API; the client stays unmodified                                          | static       | single-shot | HTTP + SSE          | hour    |
+| [`realtime-transcription`](./realtime-transcription) | Audio up, transcripts back, on one socket                                                | dynamic      | persistent  | WebSocket           | hour    |
 
 Start with `hello-world` (the smallest end-to-end path); the others each layer on one new idea. More will follow, including a full example that exercises every feature. Each is self-contained and runs **offchain** (free, no wallet); most also run **on-chain** (paid) — see each README.
 

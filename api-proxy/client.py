@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """api-proxy client: discover a runner, send a prompt, get the image back.
 
-The request body is the Hugging Face text-to-image payload as-is
-({"inputs": "<prompt>"}); the runner forwards it verbatim and the image comes
-back as raw JPEG bytes in `result.content`.
+The request body is the Hugging Face payload as-is ({"inputs": "<prompt>"} to
+paint, {"inputs": "<base64 image>"} to classify); the runner forwards it
+verbatim. The image comes back as raw JPEG bytes in `result.content`, the labels
+as JSON.
 
 The operator offers two models, so `--app` picks which one to call. Discovery
 matches app ids exactly, which is the whole reason each model has its own: it is
-what a caller selects and pays for.
+what a caller selects and pays for. `--image` feeds a file to the classifier, so
+the picture SD3 just painted is what ViT reads back.
 
 Livepeer integration (grep `# Livepeer:`):
   1. runner_selector() — discover orchestrators advertising the app
@@ -21,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import logging
 from pathlib import Path
 
@@ -30,7 +33,7 @@ from livepeer_gateway.selection import runner_selector
 
 DEFAULT_DISCOVERY = "https://localhost:8935/discovery"
 DEFAULT_APP = "livepeer-example/stable-diffusion-3-medium"
-FLUX_APP = "livepeer-example/flux-1-schnell"  # the other one this demo offers
+VIT_APP = "livepeer-example/vit-base-patch16-224"  # the other one this demo offers
 DEFAULT_OUTPUT = "api-proxy-out.jpg"
 
 log = logging.getLogger("api-proxy-client")
@@ -45,9 +48,14 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--output", default=DEFAULT_OUTPUT, help="output image path")
     parser.add_argument(
+        "--image",
+        default="",
+        help=f"image to classify instead of a prompt to paint (use with --app {VIT_APP})",
+    )
+    parser.add_argument(
         "--app",
         default=DEFAULT_APP,
-        help=f"app id to call; this demo also offers {FLUX_APP}",
+        help=f"app id to call; this demo also offers {VIT_APP}",
     )
     parser.add_argument("--discovery", default=DEFAULT_DISCOVERY)
     parser.add_argument(
@@ -69,18 +77,31 @@ async def main() -> None:
         runner = cursor.candidates[0]
         log.info("app=%s app_url=%s", args.app, runner.url)
 
+        # Both capabilities take the same HF payload; only what goes in
+        # `inputs` differs, a prompt to paint or an image to read.
+        if args.image:
+            source = Path(args.image).expanduser().read_bytes()
+            inputs = base64.b64encode(source).decode()
+        else:
+            inputs = args.prompt
+
         result = await call_runner(  # Livepeer: 2
             runner=runner,  # discovery metadata tells call_runner the price unit
             runner_url=runner.url.rstrip("/") + "/proxy",
-            payload={"inputs": args.prompt},  # the HF payload, forwarded as-is
+            payload={"inputs": inputs},  # the HF payload, forwarded as-is
             signer_url=args.signer.strip() or None,
             timeout=180,  # a hosted diffusion model can take tens of seconds
         )
-        image = result.content or b""  # the image comes back as raw bytes, not JSON
+        body = result.content or b""  # both answers arrive unparsed, not as JSON
+
+        # A painter answers with an image, a classifier with labels and scores.
+        if args.image:
+            log.info("labels: %s", body.decode())
+            return
 
         out_path = Path(args.output).expanduser()
-        out_path.write_bytes(image)
-        log.info("wrote %s (%d bytes, %s)", out_path, len(image), result.content_type)
+        out_path.write_bytes(body)
+        log.info("wrote %s (%d bytes, %s)", out_path, len(body), result.content_type)
     except LivepeerGatewayError as exc:
         raise SystemExit(f"ERROR: {exc}") from exc
 

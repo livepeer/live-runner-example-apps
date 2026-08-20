@@ -34,13 +34,24 @@ server {
     }
 
     # One more capability is one more location here plus one runners.json entry.
-    location = /flux/proxy {
+    # This one reads an image instead of making one, which is why it is its own
+    # app id at its own price: same pinned-URL rule, a classifier costs a
+    # fraction of a diffusion run, and the answer is JSON rather than an image.
+    location = /vit/proxy {
         limit_except POST { deny all; }
         set $args '';
-        proxy_pass https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell;
+        # The payload is the same {"inputs": ...}, carrying a base64 image, so
+        # the body is larger than nginx's 1m default allows.
+        client_max_body_size 8m;
+        proxy_pass https://router.huggingface.co/hf-inference/models/google/vit-base-patch16-224;
         proxy_set_header Authorization "Bearer ${HF_TOKEN}";
-        proxy_set_header Accept "image/jpeg";
+        # A runner answers with a JSON *object* or with opaque bytes, and this
+        # upstream answers with a bare JSON array. Hand it back as text so it
+        # travels whole and the client parses it; relabelling is the only thing
+        # config can do about a body shape, since nginx does not rewrite bodies.
+        proxy_hide_header Content-Type;
+        add_header Content-Type "text/plain; charset=utf-8" always;
         proxy_ssl_server_name on;
-        proxy_read_timeout 120s;
+        proxy_read_timeout 30s;  # one forward pass, not a diffusion run
     }
 }

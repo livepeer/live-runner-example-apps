@@ -10,13 +10,13 @@
       "price_info": { "price": 0.0001, "unit": "fixed" }
     },
     {
-      "label": "api-proxy-flux",
-      "app": "livepeer-example/flux-1-schnell",
-      "runner_url": "http://app:8989/flux",
+      "label": "api-proxy-vit",
+      "app": "livepeer-example/vit-base-patch16-224",
+      "runner_url": "http://app:8989/vit",
       "health_url": "http://app:8989/health",
       "mode": "single-shot",
       "capacity": 4,
-      "price_info": { "price": 0.00004, "unit": "fixed" }
+      "price_info": { "price": 0.00001, "unit": "fixed" }
     }
   ]
 }

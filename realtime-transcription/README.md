@@ -95,3 +95,13 @@ Start an orchestrator built from go-livepeer `v0.9.1` or newer (see [Build from 
 uv run runner.py --orchestrator https://localhost:8935 --orchSecret abcdef
 uv run client.py sample.wav
 ```
+
+## Session handoff (spike)
+
+[`handoff_client.py`](handoff_client.py) is a proof-of-concept for the Console → client streaming design: it does **not** call `reserve_session`. It reads a JSON envelope (`session_id`, `app_url`, `control_url`, `endpoint`, payment snapshot, `signer_url`, `signer_token`), runs the 3-second funding loop itself, opens `wss://` from `app_url`, and `POST`s `control_url/stop` on the way out.
+
+This is not a production MCP tool. A signer JWT that can call `generate-live-payment` is unscoped today — see `gateway-web/docs/stream-session-handoff.md`. Use it only against a local envelope you minted yourself:
+
+```sh
+uv run handoff_client.py envelope.json sample.wav
+```

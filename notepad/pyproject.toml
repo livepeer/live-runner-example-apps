@@ -1,0 +1,8 @@
+[project]
+name = "livepeer-notepad"
+version = "0.1.0"
+description = "Persistent HTTP notepad example app for the Livepeer network."
+requires-python = ">=3.12"
+dependencies = [
+    "livepeer-gateway>=1.0.0",
+]
